@@ -408,9 +408,8 @@ function renderLogin(msg){app().innerHTML=`<div style="max-width:430px;margin:7v
   <div style="text-align:center;margin-bottom:14px"><div style="font-size:42px">🌱</div><h2 style="margin:6px 0">Kids Garden</h2><div class="sub">Painel Pedagógico</div></div>
   <div class="card" style="text-align:left">
    <h3>Entrar</h3>
-   <p class="hint">Use seu e-mail <b>@${ALLOWED_DOMAIN}</b>. No primeiro acesso, a senha é <b>123456</b> (você troca depois).</p>
-   <label class="fl">E-mail</label><input class="inp" id="lg_email" type="email" placeholder="nome@${ALLOWED_DOMAIN}">
-   <label class="fl" style="margin-top:8px">Senha</label><input class="inp" id="lg_pw" type="password" placeholder="sua senha (123456 no primeiro acesso)" onkeydown="if(event.key==='Enter')doLogin()">
+   <label class="fl">E-mail</label><input class="inp" id="lg_email" type="email" placeholder="seu e-mail">
+   <label class="fl" style="margin-top:8px">Senha</label><input class="inp" id="lg_pw" type="password" placeholder="sua senha" onkeydown="if(event.key==='Enter')doLogin()">
    <label class="fl" style="margin-top:10px;display:flex;align-items:center;gap:7px;font-weight:600"><input type="checkbox" id="lg_keep" checked> Continuar conectado por 24 horas</label>
    ${msg?`<p class="small" style="color:var(--bad);margin-top:8px"><b>${esc(msg)}</b></p>`:''}
    <div style="margin-top:14px"><button class="btn" onclick="doLogin()">Entrar →</button></div>
@@ -420,7 +419,7 @@ async function doLogin(){if(!sbClient){toast('Sem conexão com a nuvem');return;
  if(!email.endsWith('@'+ALLOWED_DOMAIN)){renderLogin('Use seu e-mail @'+ALLOWED_DOMAIN+'.');return;}
  toast('Entrando...');
  let res=await sbClient.auth.signInWithPassword({email,password:pw});
- if(res.error){const su=await sbClient.auth.signUp({email,password:pw});if(su.error){renderLogin('Senha incorreta. No primeiro acesso, use 123456.');return;}}
+ if(res.error){const su=await sbClient.auth.signUp({email,password:pw});if(su.error){renderLogin('Senha incorreta.');return;}}
  onLoggedIn(email,keep);}
 function onLoggedIn(email,keep){CURRENT_EMAIL=email;try{localStorage.setItem('kg.auth',JSON.stringify({email,until:Date.now()+864e5,keep:!!keep}));sessionStorage.setItem('kg.alive','1');}catch(e){}finishBoot();}
 async function finishBoot(){toast('Carregando...');await loadCloud();CLOUD_READY=true;subscribeCloud();go('home');}
