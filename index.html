@@ -409,7 +409,25 @@ function applyPatches(s){
 function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(STATE));}catch(e){}
  if(CLOUD_READY&&sbClient){clearTimeout(_cloudTimer);_cloudTimer=setTimeout(cloudSave,600);}}
 /* ===== Cloud (Supabase) + Login ===== */
-function cloudSave(){if(!sbClient)return;try{sbClient.from('app_state').update({data:STATE,updated_at:new Date().toISOString(),updated_by:CURRENT_EMAIL}).eq('id',1).then(({error})=>{if(error)console.warn('cloudSave',error.message);});}catch(e){}}
+function _isObj(o){return o&&typeof o==='object'&&!Array.isArray(o);}
+function _mObj(a,b){if(!_isObj(a)||!_isObj(b))return b===undefined?a:b;var o={},k;for(k in a)o[k]=a[k];for(k in b)o[k]=(_isObj(a[k])&&_isObj(b[k]))?_mObj(a[k],b[k]):b[k];return o;}
+function _mSessions(a,b){var o={},c;for(c in a)o[c]=(a[c]||[]).slice();for(c in b){var arr=o[c]||(o[c]=[]);var ix={};arr.forEach(function(s,i){ix[(s.date||'')+'|'+(s.slot||'')]=i;});(b[c]||[]).forEach(function(s){var k=(s.date||'')+'|'+(s.slot||'');if(ix[k]!=null){var e=arr[ix[k]],m={},p;for(p in e)m[p]=e[p];for(p in s)m[p]=s[p];m.rows=_mObj(e.rows||{},s.rows||{});arr[ix[k]]=m;}else{arr.push(s);ix[k]=arr.length-1;}});}return o;}
+function _mAdded(a,b){var o={},c;for(c in a)o[c]=(a[c]||[]).slice();for(c in b){o[c]=o[c]||[];(b[c]||[]).forEach(function(n){if(o[c].indexOf(n)<0)o[c].push(n);});}return o;}
+function _mById(a,b){var o=(a||[]).slice(),ix={};o.forEach(function(x,i){if(x&&x.id!=null)ix[x.id]=i;});(b||[]).forEach(function(x){if(x&&x.id!=null&&ix[x.id]!=null)o[ix[x.id]]=x;else o.push(x);});return o;}
+function _mUniq(a,b){var o=(a||[]).slice();(b||[]).forEach(function(x){if(o.indexOf(x)<0)o.push(x);});return o;}
+function mergeStatesForSave(base,loc){var m={},k;for(k in base)m[k]=base[k];for(k in loc)if(!(k in m))m[k]=loc[k];
+ m.sessions=_mSessions(base.sessions||{},loc.sessions||{});m.addedStudents=_mAdded(base.addedStudents||{},loc.addedStudents||{});
+ m.customClasses=_mById(base.customClasses||[],loc.customClasses||[]);m.teacherTasks=_mById(base.teacherTasks||[],loc.teacherTasks||[]);m.taskLog=_mById(base.taskLog||[],loc.taskLog||[]);m.patches=_mUniq(base.patches||[],loc.patches||[]);
+ ['skills','tests','notes','messages','actions','dollarAdj','classMeta','students','archived','fluent','camb'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
+ return m;}
+async function cloudSave(){if(!sbClient)return;try{
+ var r=await sbClient.from('app_state').select('data').eq('id',1).single();
+ var base=(!r.error&&r.data&&r.data.data&&Object.keys(r.data.data).length)?r.data.data:null;
+ var merged=base?mergeStatesForSave(base,STATE):STATE;
+ STATE=merged;try{applyClassMeta();}catch(e){}
+ var w=await sbClient.from('app_state').update({data:merged,updated_at:new Date().toISOString(),updated_by:CURRENT_EMAIL}).eq('id',1);
+ if(w&&w.error)console.warn('cloudSave',w.error.message);
+}catch(e){console.warn('cloudSave',e&&e.message||e);}}
 function mergeState(raw){const b=blank();const s=Object.assign(b,raw||{});s.patches=s.patches||[];return s;}
 async function loadCloud(){if(!sbClient)return;try{const r=await sbClient.from('app_state').select('data').eq('id',1).single();if(r.error){console.warn('loadCloud',r.error.message);return;}const raw=r.data&&r.data.data;const empty=!(raw&&Object.keys(raw).length);if(!empty){STATE=mergeState(raw);}try{applyPatches(STATE);}catch(e){}if(empty){try{migrateForCloud();}catch(e){}}try{applyClassMeta();}catch(e){}try{syncAdded();}catch(e){}cloudSave();}catch(e){console.warn(e);}}
 function subscribeCloud(){if(!sbClient)return;try{sbClient.channel('app_state_rt').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state'},payload=>{const row=payload&&payload.new;if(row&&row.updated_by!==CURRENT_EMAIL&&row.data){STATE=mergeState(row.data);try{applyClassMeta();}catch(e){}render();}}).subscribe();}catch(e){}}
