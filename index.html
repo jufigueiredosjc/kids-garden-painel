@@ -471,6 +471,7 @@ function applyClassMeta(){
   if(ov.kidDollar!==undefined)c.kidDollar=!!ov.kidDollar;
   if(ov.count!==undefined)c.count=!!ov.count;});
  CLASSES.length=0;base.forEach(c=>CLASSES.push(c));
+ try{syncAdded();}catch(e){}
 }
 function sessionsOf(id){return STATE.sessions[id]||[];}
 /* ---- Fluent Steps (Monday conversation club, by time slot) ---- */
