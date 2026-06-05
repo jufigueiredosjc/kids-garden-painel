@@ -1211,6 +1211,47 @@ function tabSkillsSimple(id){
 }
 /* NURSERY — project-based developmental observation (no phonics, no pass/fail) */
 let NURSERY_PROJ=1; // default = Birds (current)
+let KINDER_PROJ=0; // Kinder & Kinder Plus project-based skills (0 = current project)
+const KINDER_PROJECTS=[
+ {name:"Birds",status:"current",emoji:"🐦",lessons:9,
+  objectives:[
+   "Name the project birds (flamingo, hummingbird, peacock, woodpecker, penguin, toucan, parrot, owl)",
+   "Explain the characteristics of the birds we studied, and what makes an animal a bird",
+   "Describe why birds are important and show care and respect for living things"],
+  comp:{
+   "Listening & Understanding":[
+    "Follows multi-step instructions in English (circle time, learning centres, clean-up)",
+    "Understands and responds to the Questions of the Week (What is your name? How old are you?)",
+    "Identifies a bird and its features when it is named or described"],
+   "Speaking & Vocabulary":[
+    "Names the project birds and uses the structure 'It is a …'",
+    "Uses target structures: 'The bird is [colour]', 'It can fly / swim', 'It eats …', 'It lives in …'",
+    "Recalls and says at least one fact about a bird we studied",
+    "Asks and answers simple questions: What bird is it? What does it eat? Where does it live?"],
+   "Project knowledge (Birds)":[
+    "Explains what makes an animal a bird (feathers, wings, beak, two legs, lays eggs)",
+    "Describes features of specific birds (flamingo is pink; hummingbird flies backwards; penguin swims but cannot fly; woodpecker pecks trees; owl turns its head)",
+    "Knows that not all birds fly, and sorts birds by where they live and what they eat (seeds, fruit, fish)"],
+   "Early literacy & numeracy":[
+    "Recognises letters and beginning sounds and finds the letters from their own name (links to Jolly Phonics)",
+    "Counts and matches quantities 1–10 in learning-centre games",
+    "Identifies colours and shapes, and sorts and matches (memory, 'is it a bird?', patterns)"],
+   "Fine motor, focus & social":[
+    "Holds the crayon or pencil correctly; traces, colours, glues and paints with growing control",
+    "Sustains attention and concentration in learning-centre tasks (memory, puzzles)",
+    "Joins circle time and dramatic play; takes turns and respects shared materials"]},
+  plan:[
+   {n:1,t:"Introduction – Birds",o:"Discovers the new project; explores 'What is a bird?' — colour, size and 'can birds fly?'. Key vocabulary: bird, nest, baby birds, fly."},
+   {n:2,t:"What is a bird? / Flamingo",o:"Learns that birds are animals with feathers, wings, a beak and two legs, and that lay eggs; the flamingo has a long neck and is pink. Recalls one fact; completes a puzzle."},
+   {n:3,t:"Hummingbird",o:"Smallest bird, very fast wings, can fly backwards. Builds concentration and focus (memory game); circles only the hummingbirds (visual discrimination)."},
+   {n:4,t:"Peacock",o:"Only the males have colourful feathers; eats ants, grains and insects. Explores dramatic play in the micro-world; matches by shape."},
+   {n:5,t:"Woodpecker",o:"Birds have different beaks, sizes and diets; the woodpecker has a strong beak and pecks trees for insects. Counts insects (numeracy); Dance & Freeze (listening & self-control)."},
+   {n:6,t:"Review & Penguin",o:"Reviews flamingo, peacock and woodpecker (matches concrete to flashcard, full sentence 'It is a …'); penguins swim but cannot fly. Colour matching."},
+   {n:7,t:"Toucan",o:"Big, colourful bill used to pick fruit; lives in the forest and is not a strong flyer; relates the toucan to the woodpecker. Colour, glue and trace (fine motor)."},
+   {n:8,t:"Parrot",o:"Curved beak and four toes; very intelligent and can mimic speech; comes in many colours and sizes. Fine-motor painting with a cotton swab."},
+   {n:9,t:"Owl / Snowy Owl",o:"Rotates its neck, is awake at night and lives in cold places; flies silently. Traces lines (fine motor). End of project: names and sorts all the birds learned."}]},
+ {name:"Project 2",status:"soon",emoji:"🌱",lessons:0,objectives:[],comp:{},plan:[]},
+ {name:"Project 3",status:"soon",emoji:"🌟",lessons:0,objectives:[],comp:{},plan:[]}];
 function nurseryGuideInner(){return `
    <div class="grid feature-grid">
      <div class="tip"><div class="e">💛</div><h4>A safe, happy brain learns</h4><p>At this age the brain builds ~1 million connections per second, but only when the child feels secure. Settling, joy and warm routines come first — they are the foundation, not a distraction.</p></div>
@@ -1251,6 +1292,24 @@ function tabSkillsNursery(id){
    <div class="acc-b">${nurseryGuideInner()}</div></div>`;
 }
 function setNurseryProj(i,id){NURSERY_PROJ=i;renderClass(id);}
+function setKinderProj(i,id){KINDER_PROJ=i;renderClass(id);}
+function kinderProjectCard(id){
+ if(KINDER_PROJ>=KINDER_PROJECTS.length)KINDER_PROJ=0;
+ const sel=KINDER_PROJECTS[KINDER_PROJ];
+ const btns=KINDER_PROJECTS.map((p,i)=>{const tag=p.status==='current'?' · now':p.status==='done'?' · done':' · soon';return `<button class="unit-tab ${i===KINDER_PROJ?'active':''} ${p.status==='current'?'done':''}" onclick="setKinderProj(${i},'${id}')">${p.emoji} ${esc(p.name)}<span class="muted small" style="font-weight:600">${tag}</span></button>`;}).join('');
+ let body;
+ if(sel.comp&&Object.keys(sel.comp).length){
+   const objs=(sel.objectives&&sel.objectives.length)?`<div class="flag ok"><span class="fi">🎯</span><div><b>By the end of the ${esc(sel.name)} project, children will be able to:</b><ul style="margin:6px 0 0 18px">${sel.objectives.map(o=>`<li>${esc(o)}</li>`).join('')}</ul></div></div>`:'';
+   const comp=Object.entries(sel.comp).map(([k,v])=>`<div class="comp"><h5>${esc(k)}</h5><ul>${v.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
+   const plan=(sel.plan&&sel.plan.length)?`<div class="card" style="box-shadow:none;border:1px dashed var(--line);background:var(--soft);margin:12px 0 0"><h3 style="font-size:14px">📚 Lesson by lesson (${sel.lessons||sel.plan.length} lessons)</h3><div class="tbl-wrap"><table><tr><th>#</th><th>Lesson</th><th>What children develop</th></tr>${sel.plan.map(l=>`<tr><td><b>${l.n}</b></td><td><b>${esc(l.t)}</b></td><td class="small">${esc(l.o)}</td></tr>`).join('')}</table></div></div>`:'';
+   body=`${objs}${comp}${plan}`;
+ }else{
+   body=`<div class="flag warn"><span class="fi">🗓</span><div>The <b>${esc(sel.name)}</b> project hasn't been added yet. Its end-of-project competencies and the lesson-by-lesson skills will appear here when the school starts it.</div></div>`;
+ }
+ return `<div class="card"><h3>🐦 Project — skills & competencies</h3>
+   <p class="hint">What children develop through Project-Based Learning. Pick a project to see its <b>end-of-project competencies</b> and the <b>lesson-by-lesson</b> skills.</p>
+   <div class="unit-tabs" style="margin-top:8px">${btns}</div>
+   <div style="margin-top:12px">${body}</div></div>`;}
 /* KINDER & KINDER PLUS — Jolly Phonics assessment by sound group */
 function tabSkillsPhonics(id){
  const c=getClass(id);const items=PHONICS_GROUPS;const gi=CUR_PERIOD;const sounds=PHONICS_SOUNDS[gi]||[];const skl=STATE.skills[id]||{};const ud=skl[gi]||{};
@@ -1276,7 +1335,8 @@ function tabSkillsPhonics(id){
      <div class="tip"><div class="e">🔗</div><h4>Blending & segmenting</h4><p>Blends sounds to read (s-a-t → "sat") and breaks words into sounds to spell.</p></div>
      <div class="tip"><div class="e">✍️</div><h4>Letter formation</h4><p>Forms the letter correctly with the Jolly Phonics action; links sound to letter shape.</p></div>
      <div class="tip"><div class="e">⭐</div><h4>Tricky words</h4><p>Begins to recognise common tricky words by sight (I, the, he, she, me, we, be).</p></div>
-   </div></div>`;
+   </div></div>
+  ${kinderProjectCard(id)}`;
 }
 function setPhonicsObs(id,period,si,val){setSkill(id,period,si,'Observation',val);renderClass(id);}
 function setPeriod(i,id){CUR_PERIOD=i;renderClass(id);}
