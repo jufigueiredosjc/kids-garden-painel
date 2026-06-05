@@ -267,6 +267,16 @@ function activeStudents(c){return (c.students||[]).filter(n=>!isArchived(c.id,n)
 function archivedOf(c){return (c.students||[]).filter(n=>isArchived(c.id,n));}
 function archiveStudent(cid,name){if(!confirm('Archive '+displayName(cid,name)+'? They will no longer appear in reports or pending, but their history is kept.'))return;STATE.archived=STATE.archived||{};STATE.archived[cid+'::'+name]={date:todayISO()};save();toast('📦 Archived');render();}
 function unarchiveStudent(cid,name){if(STATE.archived)delete STATE.archived[cid+'::'+name];save();toast('♻ Restored');render();}
+function deleteStudentPermanently(cid,name){const dn=displayName(cid,name);
+ if(!confirm('⚠️ Permanently delete '+dn+'?\n\nThis child and ALL of their history (reports, notes, skills, Kid\'s Dollars) will be erased for everyone, in the cloud, and cannot be undone.\n\nTip: to keep the history, use Archive instead.'))return;
+ tombstone('stu|'+cid+'|'+name);
+ if(STATE.addedStudents&&STATE.addedStudents[cid])STATE.addedStudents[cid]=STATE.addedStudents[cid].filter(n=>n!==name);
+ if(STATE.students)delete STATE.students[cid+'::'+name];
+ if(STATE.archived)delete STATE.archived[cid+'::'+name];
+ if(STATE.dollarAdj)delete STATE.dollarAdj[cid+'::'+name];
+ (sessionsOf(cid)||[]).forEach(s=>{if(s.rows)delete s.rows[name];});
+ const c=getClass(cid);if(c&&c.students)c.students=c.students.filter(n=>n!==name);
+ save();toast('🗑 '+dn+' permanently deleted — saved to the cloud');render();}
 function archivedList(){const A=STATE.archived||{};return Object.keys(A).map(k=>{const i=k.indexOf('::');const cid=k.slice(0,i),name=k.slice(i+2);const c=getClass(cid);return {cid,name,className:c?c.name:cid,date:A[k].date,days:daysSince(A[k].date)};}).sort((a,b)=>b.days-a.days);}
 function exportStudentRecord(cid,name){const c=getClass(cid);const rec={student:displayName(cid,name),classRecordName:name,class:c?c.name:cid,dob:dobOf(cid,name),archivedOn:(archInfo(cid,name)||{}).date,sessions:sessionsOf(cid).filter(s=>(s.rows||{})[name]).map(s=>({date:s.date,slot:s.slot,theme:s.theme,...(s.rows[name])})),tests:(studentTests?studentTests(cid,name):[]),coordNotes:(coordNotesOf?coordNotesOf(cid,name):[])};
  const blob=new Blob([JSON.stringify(rec,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=('record-'+displayName(cid,name)+'.json').replace(/[^a-z0-9.\-]+/gi,'_');a.click();toast('⬇️ Record downloaded — save it to Drive');}
@@ -285,6 +295,7 @@ function bdayDaysAway(dob){if(!dob)return null;const t=new Date();const today=ne
 function ageTurning(dob){if(!dob)return null;const p=dob.split('-');if(p.length!==3)return null;const t=new Date();let yr=t.getFullYear();const bd=new Date(yr,Number(p[1])-1,Number(p[2]));if(bd<new Date(t.getFullYear(),t.getMonth(),t.getDate()))yr++;return yr-Number(p[0]);}
 function allBirthdays(){const seen={};const out=[];CLASSES.forEach(c=>{(c.students||[]).forEach(n=>{if(isArchived(c.id,n))return;const dob=dobOf(c.id,n);if(!dob)return;const full=displayName(c.id,n);if(seen[full])return;seen[full]=1;out.push({full,dob,classId:c.id,className:c.name,days:bdayDaysAway(dob),age:ageTurning(dob)});});});return out;}
 function birthdaysToday(){return allBirthdays().filter(b=>b.days===0);}
+function allStudentsAdmin(){const out=[];CLASSES.forEach(c=>{activeStudents(c).forEach(n=>{out.push({cid:c.id,name:n,full:displayName(c.id,n),dob:dobOf(c.id,n),className:c.name});});});return out.sort((a,b)=>a.full.localeCompare(b.full));}
 
 /* skill sets by level */
 const SKILLSETS={
@@ -379,7 +390,7 @@ const SEED_SKILLS={};
 const CLASS_BASE=JSON.parse(JSON.stringify(CLASSES));
 let STATE=load();
 try{applyClassMeta();}catch(e){}
-function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[]};}
+function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],tombstones:{}};}
 function load(){
  let s=null;
  try{const r=localStorage.getItem(LS_KEY);if(r)s=JSON.parse(r);}catch(e){}
@@ -415,11 +426,28 @@ function _mSessions(a,b){var o={},c;for(c in a)o[c]=(a[c]||[]).slice();for(c in 
 function _mAdded(a,b){var o={},c;for(c in a)o[c]=(a[c]||[]).slice();for(c in b){o[c]=o[c]||[];(b[c]||[]).forEach(function(n){if(o[c].indexOf(n)<0)o[c].push(n);});}return o;}
 function _mById(a,b){var o=(a||[]).slice(),ix={};o.forEach(function(x,i){if(x&&x.id!=null)ix[x.id]=i;});(b||[]).forEach(function(x){if(x&&x.id!=null&&ix[x.id]!=null)o[ix[x.id]]=x;else o.push(x);});return o;}
 function _mUniq(a,b){var o=(a||[]).slice();(b||[]).forEach(function(x){if(o.indexOf(x)<0)o.push(x);});return o;}
+/* Tombstones = deletion markers. They travel inside the merged state so a delete
+   survives the union-merge (and propagates to everyone) instead of being re-added
+   from the cloud copy. Without these, deleting anything would "come back". */
+function tombstone(key){STATE.tombstones=STATE.tombstones||{};STATE.tombstones[key]=Date.now();}
+function applyTombstones(m){var T=m&&m.tombstones;if(!T)return m;var any=false,key;for(key in T){any=true;break;}if(!any)return m;
+ if(m.sessions){for(var cid in m.sessions){m.sessions[cid]=(m.sessions[cid]||[]).filter(function(s){return !T['sess|'+cid+'|'+(s.date||'')+'|'+(s.slot||'')];});}}
+ if(m.addedStudents){for(var c2 in m.addedStudents){m.addedStudents[c2]=(m.addedStudents[c2]||[]).filter(function(n){return !T['stu|'+c2+'|'+n];});}}
+ for(key in T){if(key.indexOf('stu|')===0){var pr=key.split('|'),sc=pr[1],sn=pr.slice(2).join('|');
+   if(m.students)delete m.students[sc+'::'+sn];
+   if(m.archived)delete m.archived[sc+'::'+sn];
+   if(m.dollarAdj)delete m.dollarAdj[sc+'::'+sn];
+   if(m.sessions&&m.sessions[sc])m.sessions[sc].forEach(function(s){if(s.rows)delete s.rows[sn];});}}
+ if(m.customClasses)m.customClasses=m.customClasses.filter(function(x){return !(x&&x.id!=null&&T['cls|'+x.id]);});
+ if(m.teacherTasks)m.teacherTasks=m.teacherTasks.filter(function(x){return !(x&&x.id!=null&&T['tsk|'+x.id]);});
+ if(m.taskLog)m.taskLog=m.taskLog.filter(function(x){return !(x&&x.id!=null&&T['log|'+x.id]);});
+ return m;}
 function mergeStatesForSave(base,loc){var m={},k;for(k in base)m[k]=base[k];for(k in loc)if(!(k in m))m[k]=loc[k];
  m.sessions=_mSessions(base.sessions||{},loc.sessions||{});m.addedStudents=_mAdded(base.addedStudents||{},loc.addedStudents||{});
  m.customClasses=_mById(base.customClasses||[],loc.customClasses||[]);m.teacherTasks=_mById(base.teacherTasks||[],loc.teacherTasks||[]);m.taskLog=_mById(base.taskLog||[],loc.taskLog||[]);m.patches=_mUniq(base.patches||[],loc.patches||[]);
- ['skills','tests','notes','messages','actions','dollarAdj','classMeta','students','archived','fluent','camb'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
- return m;}
+ ['skills','tests','notes','messages','actions','dollarAdj','classMeta','students','archived','fluent','camb','coordNotes'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
+ m.tombstones=_mObj(base.tombstones||{},loc.tombstones||{});
+ return applyTombstones(m);}
 async function cloudSave(){if(!sbClient)return;try{
  var r=await sbClient.from('app_state').select('data').eq('id',1).single();
  var base=(!r.error&&r.data&&r.data.data&&Object.keys(r.data.data).length)?r.data.data:null;
@@ -557,7 +585,9 @@ function attentionList(id){
   if(reasons.length)out.push({name:n,reasons});});
  return out;
 }
-function pendingObs(id){const c=getClass(id);if(c.fluent)return[];const act=new Set(activeStudents(c));const out=[];sessionsOf(id).forEach(s=>{const miss=[];const r=s.rows||{};Object.keys(r).forEach(n=>{if(!act.has(n))return;const v=r[n]||{};if((v.att==='Present'||v.att==='Late')&&!(v.obs&&String(v.obs).trim()))miss.push(displayName(id,n));});if(miss.length)out.push({date:s.date||'(no date)',students:miss});});out.sort((a,b)=>(a.date||'').localeCompare(b.date||''));return out;}
+function pendingObs(id){const c=getClass(id);if(c.fluent)return[];const act=new Set(activeStudents(c));const out=[];sessionsOf(id).forEach(s=>{if(!s.date)return;const miss=[];const r=s.rows||{};let anyActiveObs=false;Object.keys(r).forEach(n=>{if(!act.has(n))return;const v=r[n]||{};if(v.obs&&String(v.obs).trim())anyActiveObs=true;if((v.att==='Present'||v.att==='Late')&&!(v.obs&&String(v.obs).trim()))miss.push(displayName(id,n));});
+ if(!anyActiveObs){out.push({date:s.date,students:[],generalOnly:true});}
+ else if(miss.length){out.push({date:s.date,students:miss});}});out.sort((a,b)=>(a.date||'').localeCompare(b.date||''));return out;}
 function kdSem(){const now=new Date();const y=now.getFullYear();const start=new Date(y,1,1);const end=new Date(y,5,30);let frac=(now-start)/(end-start);frac=Math.max(0,Math.min(1,frac));return{frac,expected:Math.round(200*frac),pct:Math.round(frac*100)};}
 function kdCheck(id){const c=getClass(id);if(!c.kidDollar)return null;const sem=kdSem();const target=Math.round(sem.expected*0.85);const behind=[];activeStudents(c).forEach(n=>{const d=studentStats(id,n).dollars;if(sem.expected>0&&d<target)behind.push({name:n,dollars:d,gap:Math.max(1,sem.expected-d)});});behind.sort((a,b)=>a.dollars-b.dollars);return{expected:sem.expected,target,pct:sem.pct,behind};}
 function actionsOf(id){STATE.actions=STATE.actions||{};return STATE.actions[id]||[];}
@@ -756,7 +786,7 @@ function tabEditHistory(id){
    </table></div>`:'<p class="muted small">No reports yet.</p>'}</div>`;
 }
 function editSession(id,i){EDIT_IDX=i;renderClass(id);}
-function deleteSession(id,i){const s=sessionsOf(id)[i];if(!confirm('Delete the report for '+(s&&s.date||'this class')+'? This cannot be undone.'))return;STATE.sessions[id].splice(i,1);save();toast('🗑 Report deleted');EDIT_IDX=null;renderClass(id);}
+function deleteSession(id,i){const s=sessionsOf(id)[i];if(!confirm('⚠️ Permanently delete the report for '+(s&&s.date||'this class')+'?\n\nIt will be erased for everyone, in the cloud, and cannot be undone.'))return;if(s)tombstone('sess|'+id+'|'+(s.date||'')+'|'+(s.slot||''));STATE.sessions[id].splice(i,1);save();toast('🗑 Report permanently deleted');EDIT_IDX=null;renderClass(id);}
 function addMissedSession(id){const el=$("#add_date");const d=el&&el.value;if(!d){toast('Pick a date first');return;}const c=getClass(id);
  let entry;
  if(c.fluent){const slot=($("#add_slot")&&$("#add_slot").value)||c.slots[0];entry={date:d,slot,theme:FLUENT_THEMES[d]||'',high:'',improve:'',rows:{}};fluentActive(slot).forEach(n=>{entry.rows[n]={att:'Present',obs:''};});}
@@ -1070,7 +1100,9 @@ function tabOverview(id){
  else flags+=`<div class="flag ok"><span class="fi">✅</span><div><b>Reports up to date</b> with the school calendar. Last entry ${esc(od.last)}.</div></div>`;
  att.forEach(a=>{const reasons=a.reasons.join(' · ');const ns=esc(a.name).replace(/'/g,"\\'");flags+=`<div class="flag warn"><span class="fi">🔎</span><div><b>${esc(a.name)}</b> needs attention — ${esc(reasons)}${actionRows(id,a.name)}<div style="margin-top:6px"><button class="btn ghost sm" onclick="actionModal('${id}','${ns}','${encodeURIComponent(reasons)}')">📝 Log action</button></div></div></div>`;});
  if(kd){const goal=`<li>Semester goal: <b>$200</b> per child (Feb–Jun).</li><li>Expected by today: about <b>$${kd.expected}</b> (${kd.pct}% through the term).</li>`;if(kd.behind.length){flags+=`<div class="flag money"><span class="fi">💵</span><div><b>💵 Kid's Dollar tracker</b><ul style="margin:6px 0 0;padding-left:20px;line-height:1.6">${goal}<li><b>${kd.behind.length} child${kd.behind.length>1?'ren':''} below target:</b><ul style="margin:2px 0 0;padding-left:18px">${kd.behind.map(x=>`<li>${esc(displayName(id,x.name))} — <b>$${x.dollars}</b> (needs +$${x.gap})</li>`).join('')}</ul></li><li class="muted">Ms Lidiane &amp; ${esc(c.teacher)}: reward these students in the coming classes so they catch up.</li></ul>${actionRows(id,"Kid's Dollar")}<div style="margin-top:6px"><button class="btn ghost sm" onclick="actionModal('${id}','Kid\\'s Dollar','${encodeURIComponent('Kid\'s Dollar below target: '+kd.behind.map(x=>x.name+' $'+x.dollars).join(', '))}')">📝 Log action</button></div></div></div>`;}else if(kd.expected>0){flags+=`<div class="flag money"><span class="fi">💵</span><div><b>💵 Kid's Dollar tracker</b><ul style="margin:6px 0 0;padding-left:20px;line-height:1.6">${goal}<li><b>All students on track. ✅</b></li></ul></div></div>`;}}
- const _pend=pendingObs(id);if(_pend.length){const _tot=_pend.reduce((x,p)=>x+p.students.length,0);flags+=`<div class="flag warn"><span class="fi">📝</span><div><b>${_tot} observation${_tot>1?'s':''} pending.</b> A student attended but has no note yet on: <b>${_pend.map(p=>esc(p.date)).join(', ')}</b>. Open <b>📖 Edit Reports</b> to complete.</div></div>`;}
+ const _pend=pendingObs(id);const _gen=_pend.filter(p=>p.generalOnly);const _stu=_pend.filter(p=>!p.generalOnly);
+ if(_stu.length){const _tot=_stu.reduce((x,p)=>x+p.students.length,0);flags+=`<div class="flag warn"><span class="fi">📝</span><div><b>${_tot} observation${_tot>1?'s':''} pending.</b> A student attended but has no note yet on: <b>${_stu.map(p=>esc(p.date)).join(', ')}</b>. Open <b>📖 Edit Reports</b> to complete.</div></div>`;}
+ if(_gen.length){flags+=`<div class="flag warn"><span class="fi">📝</span><div><b>${_gen.length} report${_gen.length>1?'s':''} need student observations.</b> These have a date in the history but no observation for any child yet (often only a general note) on: <b>${_gen.map(p=>esc(p.date)).join(', ')}</b>. Open <b>📖 Edit Reports</b> and add a note for each child.</div></div>`;}
  const recent=sessionsOf(id).slice(-5).reverse();
  const studentsTable=`<div class="card"><h3>👧 Students — ${activeStudents(c).length}</h3>
    <p class="hint">Tap <b>Report</b> for a child's development charts & summary, or <b>History</b> for everything written about them.</p>
@@ -1701,9 +1733,12 @@ function applyTeacherRename(){const oldName=($('#trn_old')&&$('#trn_old').value)
  if(TEACHER_SEL===oldName)TEACHER_SEL=nv;
  applyClassMeta();save();const m=document.getElementById('trnmodal');if(m)m.remove();toast('✅ Teacher renamed everywhere');render();}
 function removeTeacher(t){if(teacherClassIds(t).length){toast('Reassign their classes first (edit each class above).');return;}
- if(!confirm('Remove '+t+" from the panel? Their leftover personal/general tasks and action log will be cleared. Class reports stay with the classes."))return;
- ensureTasks();STATE.teacherTasks=STATE.teacherTasks.filter(x=>!(!x.classId&&x.teacher===t));STATE.taskLog=STATE.taskLog.filter(l=>l.teacher!==t);if(TEACHER_SEL===t)TEACHER_SEL=null;save();toast('🗑 Teacher removed');render();}
-function delTask(id){ensureTasks();STATE.teacherTasks=STATE.teacherTasks.filter(x=>x.id!==id);STATE.taskLog=STATE.taskLog.filter(l=>l.taskId!==id);save();toast('🗑 Task removed');renderCoord();}
+ if(!confirm('⚠️ Permanently remove '+t+" from the panel?\n\nTheir leftover personal/general tasks and action log will be erased for everyone and cannot be undone. Class reports stay with the classes."))return;
+ ensureTasks();
+ STATE.teacherTasks.filter(x=>!x.classId&&x.teacher===t).forEach(x=>{if(x&&x.id!=null)tombstone('tsk|'+x.id);});
+ STATE.taskLog.filter(l=>l.teacher===t).forEach(l=>{if(l&&l.id!=null)tombstone('log|'+l.id);});
+ STATE.teacherTasks=STATE.teacherTasks.filter(x=>!(!x.classId&&x.teacher===t));STATE.taskLog=STATE.taskLog.filter(l=>l.teacher!==t);if(TEACHER_SEL===t)TEACHER_SEL=null;save();toast('🗑 Teacher removed');render();}
+function delTask(id){ensureTasks();tombstone('tsk|'+id);STATE.taskLog.filter(l=>l.taskId===id).forEach(l=>{if(l&&l.id!=null)tombstone('log|'+l.id);});STATE.teacherTasks=STATE.teacherTasks.filter(x=>x.id!==id);STATE.taskLog=STATE.taskLog.filter(l=>l.taskId!==id);save();toast('🗑 Task removed');renderCoord();}
 function renderCoordGate(){
  if(COORD_OK)return renderCoord();
  app().innerHTML=`<div class="lock"><div class="e">🔒</div><h2>Coordination Area</h2><p>Restricted to pedagogical coordination.</p>
@@ -1741,8 +1776,11 @@ function coordBirthdays(){
   <div class="card"><h3>🎂 Upcoming birthdays (next 30 days)</h3>
    ${soon.length?`<div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>When</th><th>Turning</th></tr>${soon.map(row).join('')}</table></div>`:'<p class="muted small">No birthdays in the next 30 days.</p>'}</div>
   <div class="card"><h3>📅 All birthdays</h3>
-   <p class="hint">${list.length} children with a registered birthday. Edit a child's birthday from their report (✏️).</p>
-   <div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Next</th><th>Turning</th></tr>${list.slice().sort((a,b)=>fmtBday(a.dob).split('/').reverse().join('').localeCompare(fmtBday(b.dob).split('/').reverse().join(''))).map(row).join('')}</table></div></div>`;
+   <p class="hint">${list.length} children with a registered birthday.</p>
+   <div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Next</th><th>Turning</th></tr>${list.slice().sort((a,b)=>fmtBday(a.dob).split('/').reverse().join('').localeCompare(fmtBday(b.dob).split('/').reverse().join(''))).map(row).join('')}</table></div></div>
+  ${(()=>{const all=allStudentsAdmin();return `<div class="card"><h3>👧 Manage children</h3>
+   <p class="hint">Rename a child (or fix the spelling of their name and birthday), or permanently remove them from the panel. Every change is saved to the cloud for everyone. ${all.length} children.</p>
+   <div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Actions</th></tr>${all.map(s=>{const ns=esc(s.name).replace(/'/g,"\\'");return `<tr><td><b>${esc(s.full)}</b></td><td>${esc(s.className)}</td><td>${s.dob?('🎂 '+esc(fmtBday(s.dob))):'<span class="muted small">—</span>'}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="editStudentModal('${s.cid}','${ns}')">✏️ Rename / birthday</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteStudentPermanently('${s.cid}','${ns}')">🗑 Delete</button></td></tr>`;}).join('')}</table></div></div>`;})()}`;
 }
 function coordMsgBanner(){
  let cards='';
@@ -1768,6 +1806,13 @@ function coordMessages(){
 }
 function setCoordTab(t){COORD_TAB=t;renderCoord();}
 
+function coordReportsPending(){let rows='';CLASSES.forEach(c=>{if(c.fluent)return;const p=pendingObs(c.id);if(!p.length)return;const gen=p.filter(x=>x.generalOnly);const stu=p.filter(x=>!x.generalOnly);const stuTot=stu.reduce((a,x)=>a+x.students.length,0);
+  rows+=`<tr><td><b>${esc(c.name)}</b> <span class="muted small">${esc(c.time)}</span></td><td>${esc(c.teacher)}</td><td>${gen.length?`<span class="badge b-late">${gen.length} without student notes</span> `:''}${stuTot?`<span class="badge b-late">${stuTot} student note${stuTot>1?'s':''} missing</span>`:''}</td><td class="small muted">${esc(p.map(x=>x.date).join(', '))}</td><td><button class="btn ghost sm" onclick="go('class','${c.id}')">Open</button></td></tr>`;});
+ if(!rows)return '';
+ return `<div class="card" style="border-color:#FBE4A8;background:linear-gradient(120deg,#FFF7E0,#FFFDF6)"><h3>📝 Reports needing student observations</h3>
+  <p class="hint">These daily reports have a date in the history but no observation for any child yet — usually a general note imported from the Canva sheet, or a coordination comment. The teacher should open each report and add a note for every child. Use this list to follow up.</p>
+  <div class="tbl-wrap"><table><tr><th>Class</th><th>Teacher</th><th>Pending</th><th>Dates</th><th></th></tr>${rows}</table></div></div>`;
+}
 function coordOverview(b){
  const data=CLASSES.map(c=>({c,s:classStats(c.id),att:attentionList(c.id).length,od:isOverdue(c),kd:c.kidDollar?kdCheck(c.id):null}));
  const totReports=data.reduce((a,d)=>a+d.s.sessions,0);
@@ -1782,6 +1827,7 @@ function coordOverview(b){
     <div class="stat bad"><div class="n">${overdueCount}</div><div class="l">Classes overdue</div></div>
     <div class="stat purple"><div class="n">${watch}</div><div class="l">Children to watch</div></div>
    </div></div>
+  ${coordReportsPending()}
   <div class="card"><h3>📊 Attendance & homework by class</h3><div style="height:340px"><canvas id="chartClass"></canvas></div></div>
   <div class="card"><h3>📋 Class performance table</h3><div class="tbl-wrap"><table>
    <tr><th>Class</th><th>Teacher</th><th>Reports</th><th>Attendance</th><th>Homework</th><th>Watch</th><th>Kid's $</th><th>Report status</th><th></th></tr>
