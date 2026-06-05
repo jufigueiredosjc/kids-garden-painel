@@ -31,6 +31,13 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .topbar .spacer{flex:1}
 .tb-btn{background:rgba(255,255,255,.16);color:#fff;padding:9px 15px;border-radius:11px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:7px;transition:.15s}
 .tb-btn:hover{background:rgba(255,255,255,.30)}
+.phsk-wrap{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:5px}
+.phsk{display:inline-flex;align-items:center;gap:3px;font-size:12px;cursor:pointer;user-select:none;background:var(--soft);border:1px solid var(--line);padding:2px 7px;border-radius:8px;white-space:nowrap}
+.phsk input{cursor:pointer;margin:0}
+.phchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.phchip{display:inline-flex;align-items:center;gap:5px;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:5px 9px;font-size:13px}
+.phbadge{display:inline-flex;min-width:20px;height:20px;align-items:center;justify-content:center;border-radius:6px;color:#fff;font-size:12px;padding:0 4px}
+.phsktiny{font-size:12px;letter-spacing:1px}
 .wrap{max-width:1180px;margin:0 auto;padding:26px 20px 70px}
 /* ---------- home ---------- */
 .hero{background:var(--card);border-radius:22px;padding:24px 28px;box-shadow:var(--shadow);margin-bottom:10px;border:1px solid var(--line);display:flex;align-items:center;gap:20px;flex-wrap:wrap}
@@ -185,6 +192,8 @@ const PHONICS_SOUNDS=[
 const PHONICS_PROGRESS=["Not assessed","Needs support","Keeping up","Secure"];
 /* Per-child daily check on the day's sound (phonics specialist options) */
 const PHONICS_LEARN=["— not marked","Recognises the sound","Blends & reads it","Secure (reads & writes)"];
+/* Jolly Phonics daily skill markers (per child, for the day's sound) */
+const PHONICS_SKILLS=[["h","👂","Hears","Hears the sound"],["s","🗣","Says","Says the pure sound"],["f","✍️","Forms","Forms the letter correctly"],["b","🔗","Blends","Blends it to read (s-a-t → sat)"]];
 /* Nursery project / theme track */
 const NURSERY_THEMES=["Me & my body","Family & home","Animals","Colours & shapes","Food","Nature & weather","Songs & rhymes","Other activity"];
 /* Nursery projects (from the school planner): Farm Animals (done) → Birds (current) → Family & Friends → 4th (TBD) */
@@ -744,7 +753,7 @@ function editSessionForm(id,i){
    <td><select class="att-sel" id="eatt_${k}">${ATT.map(a=>`<option ${(r.att||'Present')===a?'selected':''}>${a}</option>`).join('')}</select></td>
    ${fl?'':`<td><select class="att-sel" id="ehw_${k}">${HW.map(h=>`<option ${(r.hw||'')===h?'selected':''}>${h}</option>`).join('')}</select></td>`}
    ${(!fl&&c.kidDollar)?`<td><input class="inp" style="width:64px;padding:5px 8px" type="number" min="0" value="${Number(r.dollar)||0}" id="edol_${k}"></td>`:''}
-   ${ph?`<td><select class="att-sel" id="ephon_${k}">${PHONICS_LEARN.map(o=>`<option ${(r.phon||'')===o?'selected':''}>${o}</option>`).join('')}</select></td>`:''}
+   ${ph?phonCell('ephon',k,r):''}
    <td><input class="inp" style="min-width:220px;padding:6px 9px" id="eobs_${k}" value="${esc(r.obs||'')}" placeholder="${obsRequired(c)?'Observation (required)':'Observation'}"></td></tr>`;}).join('');
  return `
   <div class="page-head" style="margin-bottom:10px"><button class="back" onclick="EDIT_IDX=null;renderClass('${id}')">← All reports</button>
@@ -760,7 +769,7 @@ function editSessionForm(id,i){
      <div><label class="fl">🔧 To improve</label><textarea class="inp" id="e_improve">${esc(s.improve||'')}</textarea></div>
    </div></div>
   <div class="card"><h3>👧 Students</h3>
-   <div class="tbl-wrap"><table><tr><th>Student</th><th>Attendance</th>${fl?'':'<th>Homework</th>'}${(!fl&&c.kidDollar)?'<th>Kid\'s $</th>':''}${ph?'<th>Learned the sound?</th>':''}<th>Observation</th></tr>${rows}</table></div></div>
+   <div class="tbl-wrap"><table><tr><th>Student</th><th>Attendance</th>${fl?'':'<th>Homework</th>'}${(!fl&&c.kidDollar)?'<th>Kid\'s $</th>':''}${ph?'<th>Sound of the day — skills & level</th>':''}<th>Observation</th></tr>${rows}</table></div></div>
   <button class="btn" onclick="saveEdit('${id}',${i})">💾 Save changes</button>
   <button class="btn ghost" onclick="EDIT_IDX=null;renderClass('${id}')">Cancel</button>`;
 }
@@ -774,7 +783,7 @@ function saveEdit(id,i){
  s.date=$("#e_date").value||s.date;s.theme=$("#e_theme").value;s.high=$("#e_high").value;s.improve=$("#e_improve").value;
  if(fl&&$("#e_slot"))s.slot=$("#e_slot").value;
  const ph=c.track==='phonics';
- const rows={};names.forEach((n,k)=>{if(fl){rows[n]={att:$("#eatt_"+k).value,obs:$("#eobs_"+k).value};}else{const row={att:$("#eatt_"+k).value,hw:$("#ehw_"+k).value,dollar:c.kidDollar?Number($("#edol_"+k).value)||0:0,obs:$("#eobs_"+k).value};if(ph&&$("#ephon_"+k))row.phon=$("#ephon_"+k).value;rows[n]=row;}});
+ const rows={};names.forEach((n,k)=>{if(fl){rows[n]={att:$("#eatt_"+k).value,obs:$("#eobs_"+k).value};}else{const row={att:$("#eatt_"+k).value,hw:$("#ehw_"+k).value,dollar:c.kidDollar?Number($("#edol_"+k).value)||0:0,obs:$("#eobs_"+k).value};if(ph&&$("#ephon_"+k)){row.phon=$("#ephon_"+k).value;row.phsk=readPhonSkills('ephon',k);}rows[n]=row;}});
  s.rows=rows;save();toast('✅ Report updated');EDIT_IDX=null;renderClass(id);
 }
 
@@ -1083,7 +1092,7 @@ function tabReport(id){
    <td><select class="att-sel" id="att_${i}">${ATT.map(a=>`<option ${a==='Present'?'selected':''}>${a}</option>`).join('')}</select></td>
    <td><select class="att-sel" id="hw_${i}">${HW.map(h=>`<option>${h}</option>`).join('')}</select></td>
    ${c.kidDollar?`<td><input class="inp" style="width:64px;padding:5px 8px" type="number" min="0" value="0" id="dol_${i}"></td>`:''}
-   ${ph?`<td><select class="att-sel" id="phon_${i}">${PHONICS_LEARN.map(o=>`<option>${o}</option>`).join('')}</select></td>`:''}
+   ${ph?phonCell('phon',i,{}):''}
    <td><input class="inp" style="min-width:200px;padding:6px 9px" id="obs_${i}" placeholder="${obsRequired(c)?'Observation (required) — what did you notice?':'Observation (optional)'}"></td></tr>`).join('');
  return `
   ${(()=>{const acts=actionsOf(id);if(!acts.length)return '';const open=acts.filter(a=>!a.done);const done=acts.filter(a=>a.done);
@@ -1103,7 +1112,7 @@ function tabReport(id){
   <div class="card"><h3>👧 Students</h3>
    ${obsRequired(c)?`<div class="flag warn" style="margin-bottom:10px"><span class="fi">✍️</span><div>An <b>observation is required for every child who attended</b> — a quick note on what you noticed.${ph?' For phonics, choose how the child did with today\'s sound and add an open comment.':' (engagement, words, a small win).'}</div></div>`:''}
    <button class="btn ghost sm" style="margin-bottom:10px" onclick="markAll('Present',${activeStudents(c).length})">✓ Mark everyone present</button>
-   <div class="tbl-wrap"><table><tr><th>Student</th><th>Attendance</th><th>Homework</th>${c.kidDollar?'<th>Kid\'s $</th>':''}${ph?'<th>Learned the sound?</th>':''}<th>Observation${obsRequired(c)?' *':''}</th></tr>${rows}</table></div></div>
+   <div class="tbl-wrap"><table><tr><th>Student</th><th>Attendance</th><th>Homework</th>${c.kidDollar?'<th>Kid\'s $</th>':''}${ph?'<th>Sound of the day — skills & level</th>':''}<th>Observation${obsRequired(c)?' *':''}</th></tr>${rows}</table></div></div>
   ${ph?phonicsRef():''}
   <button class="btn" onclick="saveReport('${id}')">💾 Save daily report</button>
   <button class="btn ghost" onclick="setTab('overview','${id}')">Cancel</button>`;
@@ -1116,8 +1125,14 @@ function phonicsRef(){
      ${groups}
      <hr class="sep">
      <p class="small"><b>What “learned the sound” means:</b> <b>Recognises</b> = hears & says the pure sound; <b>Blends & reads</b> = uses it to read words (s-a-t → “sat”); <b>Secure</b> = reads & writes it confidently with the correct letter formation.</p>
+     <p class="small"><b>Daily skill markers (tick what you saw today):</b> 👂 <b>Hears</b> the sound · 🗣 <b>Says</b> the pure sound · ✍️ <b>Forms</b> the letter correctly · 🔗 <b>Blends</b> it to read. These build each child's <b>Phonics progress</b> in their Development Report.</p>
    </div></div>`;
 }
+function phonCell(prefix,idx,r){r=r||{};const sk=r.phsk||{};
+ const checks=PHONICS_SKILLS.map(([k,emo,short,desc])=>`<label class="phsk" title="${esc(desc)}"><input type="checkbox" id="${prefix}sk_${k}_${idx}" ${sk[k]?'checked':''}>${emo} ${short}</label>`).join('');
+ const sel=`<select class="att-sel" id="${prefix}_${idx}">${PHONICS_LEARN.map(o=>`<option ${(r.phon||'')===o?'selected':''}>${o}</option>`).join('')}</select>`;
+ return `<td><div class="phsk-wrap">${checks}</div>${sel}</td>`;}
+function readPhonSkills(prefix,idx){const o={};PHONICS_SKILLS.forEach(([k])=>{const el=$("#"+prefix+"sk_"+k+"_"+idx);o[k]=!!(el&&el.checked);});return o;}
 function markAll(val,n){for(let i=0;i<n;i++){const el=$("#att_"+i);if(el)el.value=val;}}
 function saveReport(id){
  const c=getClass(id);const items=trackItems(c);
@@ -1133,7 +1148,7 @@ function saveReport(id){
      return;}
  }
  const entry={date:$("#r_date").value||todayISO(),theme:$("#r_theme").value,periodIdx:idx,period:idx!=null?items[idx]:'',high:$("#r_high").value,improve:$("#r_improve").value,rows:{}};
- activeStudents(c).forEach((n,i)=>{const row={att:$("#att_"+i).value,hw:$("#hw_"+i).value,dollar:c.kidDollar?Number($("#dol_"+i).value)||0:0,obs:$("#obs_"+i).value};if(c.track==='phonics'&&$("#phon_"+i))row.phon=$("#phon_"+i).value;entry.rows[n]=row;});
+ activeStudents(c).forEach((n,i)=>{const row={att:$("#att_"+i).value,hw:$("#hw_"+i).value,dollar:c.kidDollar?Number($("#dol_"+i).value)||0:0,obs:$("#obs_"+i).value};if(c.track==='phonics'&&$("#phon_"+i)){row.phon=$("#phon_"+i).value;row.phsk=readPhonSkills('phon',i);}entry.rows[n]=row;});
  (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();toast("✅ Daily report saved");setTab('overview',id);
 }
 
@@ -1903,6 +1918,27 @@ function renderStudentView(){
  else studentReport(cid,name);
 }
 
+function phonLevelMeta(v){
+ if(v==='Secure (reads & writes)')return{e:'✍️',t:'Secure',bg:'#4FB62B'};
+ if(v==='Blends & reads it')return{e:'🔗',t:'Blending',bg:'#2C6FB0'};
+ if(v==='Recognises the sound')return{e:'👂',t:'Recognising',bg:'#FF914D'};
+ return{e:'◻',t:'Needs support',bg:'#90A4AE'};}
+function phonicsProgressCard(cid,name){
+ const entries=studentRows(cid,name).filter(r=>(r.phon&&r.phon!=='— not marked')||(r.phsk&&Object.values(r.phsk).some(Boolean)));
+ if(!entries.length)return `<div class="card"><h3>🔡 Phonics progress (Jolly Phonics)</h3><p class="muted small">No phonics recorded yet. As the teacher logs the daily sound and how the child did, this builds automatically.</p></div>`;
+ const bySound={};
+ entries.forEach(r=>{const lbl=(r.theme||'—').trim();const key=lbl.toLowerCase().replace(/[\/\s]/g,'')||'—';if(!bySound[key]||(r.date||'')>=(bySound[key].date||''))bySound[key]={...r,lbl};});
+ const list=Object.values(bySound).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+ let sec=0,bl=0,rec=0,ns=0;
+ list.forEach(e=>{const t=phonLevelMeta(e.phon).t;if(t==='Secure')sec++;else if(t==='Blending')bl++;else if(t==='Recognising')rec++;else ns++;});
+ const chips=list.map(e=>{const m=phonLevelMeta(e.phon);const sk=e.phsk||{};
+   const ticks=PHONICS_SKILLS.map(([k,emo,short])=>`<span title="${esc(short)}" style="opacity:${sk[k]?1:.22}">${emo}</span>`).join('');
+   return `<span class="phchip" title="${esc(e.lbl)} — ${esc(m.t)}"><b>${esc(e.lbl)}</b> <span class="phbadge" style="background:${m.bg}">${m.e}</span> <span class="phsktiny">${ticks}</span></span>`;}).join('');
+ return `<div class="card"><h3>🔡 Phonics progress (Jolly Phonics)</h3>
+   <p class="hint">From the daily reports — the latest record for each sound the child has worked on.</p>
+   <p class="small"><b>${list.length}</b> sound${list.length>1?'s':''} practised · <b>${sec}</b> ✍️ secure · <b>${bl}</b> 🔗 blending · <b>${rec}</b> 👂 recognising${ns?` · <b>${ns}</b> ◻ need support`:''}</p>
+   <div class="phchips">${chips}</div>
+   <p class="small muted" style="margin-top:8px">Each chip = a sound. Badge = overall level. Small icons = skills seen (👂 hears · 🗣 says · ✍️ forms the letter · 🔗 blends to read; faded = not yet).</p></div>`;}
 function studentReport(cid,name){
  const c=getClass(cid);const st=studentStats(cid,name);const rows=studentRows(cid,name);const tests=studentTests(cid,name);
  const noneHw=rows.filter(r=>r.hw==='No homework').length;
@@ -1929,6 +1965,7 @@ function studentReport(cid,name){
    <p class="small" style="margin-top:8px"><b>Strengths (proficient):</b> ${strong.length?strong.map(w=>`<span class="chip">${esc(w)}</span>`).join(' '):'<span class="muted">to be assessed</span>'}</p>
    ${Object.keys(cur).length?`<div class="tbl-wrap" style="margin-top:10px"><table><tr>${set.map(s=>`<th>${esc(s)}</th>`).join('')}</tr><tr>${set.map(s=>{const v=cur[s]||'Not assessed';return `<td><span class="badge ${ratingClass(v)}">${esc(v)}</span></td>`;}).join('')}</tr></table></div>`:''}
   </div>
+  ${c.track==='phonics'?phonicsProgressCard(cid,name):''}
   <div class="card"><h3>📈 ${c.fluent?'Participation & engagement':'Development charts'}</h3>
    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
      <div><div class="small muted center" style="margin-bottom:6px">Attendance</div><div style="height:200px"><canvas id="cAtt"></canvas></div></div>
