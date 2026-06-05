@@ -1301,13 +1301,15 @@ function kinderProjectCard(id){
  if(sel.comp&&Object.keys(sel.comp).length){
    const objs=(sel.objectives&&sel.objectives.length)?`<div class="flag ok"><span class="fi">🎯</span><div><b>By the end of the ${esc(sel.name)} project, children will be able to:</b><ul style="margin:6px 0 0 18px">${sel.objectives.map(o=>`<li>${esc(o)}</li>`).join('')}</ul></div></div>`:'';
    const comp=Object.entries(sel.comp).map(([k,v])=>`<div class="comp"><h5>${esc(k)}</h5><ul>${v.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
-   const plan=(sel.plan&&sel.plan.length)?`<div class="card" style="box-shadow:none;border:1px dashed var(--line);background:var(--soft);margin:12px 0 0"><h3 style="font-size:14px">📚 Lesson by lesson (${sel.lessons||sel.plan.length} lessons)</h3><div class="tbl-wrap"><table><tr><th>#</th><th>Lesson</th><th>What children develop</th></tr>${sel.plan.map(l=>`<tr><td><b>${l.n}</b></td><td><b>${esc(l.t)}</b></td><td class="small">${esc(l.o)}</td></tr>`).join('')}</table></div></div>`:'';
-   body=`${objs}${comp}${plan}`;
+   const stu=activeStudents(getClass(id));const pk='proj:'+sel.name;const ud=(STATE.skills[id]||{})[pk]||{};
+   const ASSESS=["Listening","Speaking","Project knowledge","Literacy and numeracy","Motor and focus"];
+   const assess=stu.length?`<div class="card" style="box-shadow:none;border:1px dashed var(--line);background:var(--soft);margin:14px 0 0"><h3 style="font-size:15px">🎯 Assess each child</h3><p class="hint">Rate each child on the <b>${esc(sel.name)}</b> project: <b>Developing → Proficient</b>. Ratings save as you change them and feed the child's progress report.</p><div class="tbl-wrap"><table><tr><th>Child</th>${ASSESS.map(s=>`<th>${esc(s)}</th>`).join('')}</tr>${stu.map((n,si)=>{const sr=ud[n]||{};return `<tr><td><b>${esc(displayName(id,n))}</b></td>${ASSESS.map(s=>{const v=sr[s]||'Not assessed';return `<td><select class="att-sel" onchange="setSkill('${id}','${pk}',${si},'${esc(s)}',this.value)">${RATING.map(r=>`<option ${r===v?'selected':''}>${r}</option>`).join('')}</select></td>`;}).join('')}</tr>`;}).join('')}</table></div><div class="no-print" style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn" onclick="saveAssessment('${id}','Assessment')">💾 Save assessment</button> <span class="muted small">Saves as you change them; click to confirm — shows in the student report.</span></div></div>`:`<div class="flag warn" style="margin:14px 0 0"><span class="fi">👧</span><div>Add students to this class to assess them on the project.</div></div>`;
+   body=`${objs}${comp}${assess}`;
  }else{
-   body=`<div class="flag warn"><span class="fi">🗓</span><div>The <b>${esc(sel.name)}</b> project hasn't been added yet. Its end-of-project competencies and the lesson-by-lesson skills will appear here when the school starts it.</div></div>`;
+   body=`<div class="flag warn"><span class="fi">🗓</span><div>The <b>${esc(sel.name)}</b> project hasn't been added yet. Its competencies and child assessment will appear here when the school starts it.</div></div>`;
  }
  return `<div class="card"><h3>🐦 Project — skills & competencies</h3>
-   <p class="hint">What children develop through Project-Based Learning. Pick a project to see its <b>end-of-project competencies</b> and the <b>lesson-by-lesson</b> skills.</p>
+   <p class="hint">What children develop through Project-Based Learning. Pick a project to see its <b>end-of-project competencies</b> and to <b>assess each child</b>.</p>
    <div class="unit-tabs" style="margin-top:8px">${btns}</div>
    <div style="margin-top:12px">${body}</div></div>`;}
 /* KINDER & KINDER PLUS — Jolly Phonics assessment by sound group */
