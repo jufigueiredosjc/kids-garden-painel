@@ -295,7 +295,7 @@ function bdayDaysAway(dob){if(!dob)return null;const t=new Date();const today=ne
 function ageTurning(dob){if(!dob)return null;const p=dob.split('-');if(p.length!==3)return null;const t=new Date();let yr=t.getFullYear();const bd=new Date(yr,Number(p[1])-1,Number(p[2]));if(bd<new Date(t.getFullYear(),t.getMonth(),t.getDate()))yr++;return yr-Number(p[0]);}
 function allBirthdays(){const seen={};const out=[];CLASSES.forEach(c=>{(c.students||[]).forEach(n=>{if(isArchived(c.id,n))return;const dob=dobOf(c.id,n);if(!dob)return;const full=displayName(c.id,n);if(seen[full])return;seen[full]=1;out.push({full,dob,classId:c.id,className:c.name,days:bdayDaysAway(dob),age:ageTurning(dob)});});});return out;}
 function birthdaysToday(){return allBirthdays().filter(b=>b.days===0);}
-function allStudentsAdmin(){const out=[];CLASSES.forEach(c=>{activeStudents(c).forEach(n=>{out.push({cid:c.id,name:n,full:displayName(c.id,n),dob:dobOf(c.id,n),className:c.name});});});return out.sort((a,b)=>a.full.localeCompare(b.full));}
+function allStudentsAdmin(){const out=[];const seen={};CLASSES.forEach(c=>{activeStudents(c).forEach(n=>{const full=displayName(c.id,n);const key=full.trim().toLowerCase();if(seen[key])return;seen[key]=1;out.push({cid:c.id,name:n,full,dob:dobOf(c.id,n),className:c.name});});});return out.sort((a,b)=>a.full.localeCompare(b.full));}
 
 /* skill sets by level */
 const SKILLSETS={
