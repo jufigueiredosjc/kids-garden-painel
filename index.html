@@ -413,34 +413,34 @@ function cloudSave(){if(!sbClient)return;try{sbClient.from('app_state').update({
 function mergeState(raw){const b=blank();const s=Object.assign(b,raw||{});s.patches=s.patches||[];return s;}
 async function loadCloud(){if(!sbClient)return;try{const r=await sbClient.from('app_state').select('data').eq('id',1).single();if(r.error){console.warn('loadCloud',r.error.message);return;}const raw=r.data&&r.data.data;const empty=!(raw&&Object.keys(raw).length);if(!empty){STATE=mergeState(raw);}try{applyPatches(STATE);}catch(e){}if(empty){try{migrateForCloud();}catch(e){}}try{applyClassMeta();}catch(e){}try{syncAdded();}catch(e){}cloudSave();}catch(e){console.warn(e);}}
 function subscribeCloud(){if(!sbClient)return;try{sbClient.channel('app_state_rt').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state'},payload=>{const row=payload&&payload.new;if(row&&row.updated_by!==CURRENT_EMAIL&&row.data){STATE=mergeState(row.data);try{applyClassMeta();}catch(e){}render();}}).subscribe();}catch(e){}}
-function accountBar(){return CURRENT_EMAIL?`<div style="text-align:right;margin-bottom:8px" class="no-print"><span class="muted small">👤 ${esc(CURRENT_EMAIL)}</span> <button class="btn ghost sm" onclick="changePwModal()">🔒 Trocar senha</button> <button class="btn ghost sm" onclick="doLogout()">↩ Sair</button></div>`:'';}
+function accountBar(){return CURRENT_EMAIL?`<div style="text-align:right;margin-bottom:8px" class="no-print"><span class="muted small">👤 ${esc(CURRENT_EMAIL)}</span> <button class="btn ghost sm" onclick="changePwModal()">🔒 Change password</button> <button class="btn ghost sm" onclick="doLogout()">↩ Sign out</button></div>`:'';}
 function renderLogin(msg){var _tb=document.getElementById('topbar');if(_tb)_tb.style.display='none';app().innerHTML=`<div style="max-width:430px;margin:7vh auto">
-  <div style="text-align:center;margin-bottom:14px"><div style="font-size:42px">🌱</div><h2 style="margin:6px 0">Kids Garden</h2><div class="sub">Painel Pedagógico</div></div>
+  <div style="text-align:center;margin-bottom:14px"><div style="font-size:42px">🌱</div><h2 style="margin:6px 0">Kids Garden</h2><div class="sub">Pedagogical Dashboard</div></div>
   <div class="card" style="text-align:left">
-   <h3>Entrar</h3>
-   <label class="fl">E-mail</label><input class="inp" id="lg_email" type="email" placeholder="seu e-mail">
-   <label class="fl" style="margin-top:8px">Senha</label><input class="inp" id="lg_pw" type="password" placeholder="sua senha" onkeydown="if(event.key==='Enter')doLogin()">
-   <label class="fl" style="margin-top:10px;display:flex;align-items:center;gap:7px;font-weight:600"><input type="checkbox" id="lg_keep" checked> Continuar conectado por 24 horas</label>
+   <h3>Sign in</h3>
+   <label class="fl">Email</label><input class="inp" id="lg_email" type="email" placeholder="your email">
+   <label class="fl" style="margin-top:8px">Password</label><input class="inp" id="lg_pw" type="password" placeholder="your password" onkeydown="if(event.key==='Enter')doLogin()">
+   <label class="fl" style="margin-top:10px;display:flex;align-items:center;gap:7px;font-weight:600"><input type="checkbox" id="lg_keep" checked> Keep me signed in for 24 hours</label>
    ${msg?`<p class="small" style="color:var(--bad);margin-top:8px"><b>${esc(msg)}</b></p>`:''}
-   <div style="margin-top:14px"><button class="btn" onclick="doLogin()">Entrar →</button></div>
+   <div style="margin-top:14px"><button class="btn" onclick="doLogin()">Sign in →</button></div>
   </div></div>`;setTimeout(()=>{const e=$('#lg_email');if(e)e.focus();},40);}
-async function doLogin(){if(!sbClient){toast('Sem conexão com a nuvem');return;}const email=($('#lg_email').value||'').trim().toLowerCase();const pw=$('#lg_pw').value||'';const keep=$('#lg_keep')?$('#lg_keep').checked:true;
- if(!email||!pw){renderLogin('Preencha e-mail e senha.');return;}
- if(!ALLOWED_EMAILS.includes(email)){renderLogin('E-mail não autorizado. Fale com a coordenação.');return;}
- toast('Entrando...');
+async function doLogin(){if(!sbClient){toast('No connection to the cloud');return;}const email=($('#lg_email').value||'').trim().toLowerCase();const pw=$('#lg_pw').value||'';const keep=$('#lg_keep')?$('#lg_keep').checked:true;
+ if(!email||!pw){renderLogin('Please enter your email and password.');return;}
+ if(!ALLOWED_EMAILS.includes(email)){renderLogin('Email not authorised. Please contact coordination.');return;}
+ toast('Signing in...');
  let res=await sbClient.auth.signInWithPassword({email,password:pw});
- if(res.error){const su=await sbClient.auth.signUp({email,password:pw});if(su.error){renderLogin('Senha incorreta.');return;}}
+ if(res.error){const su=await sbClient.auth.signUp({email,password:pw});if(su.error){renderLogin('Incorrect password.');return;}}
  onLoggedIn(email,keep);}
 function onLoggedIn(email,keep){CURRENT_EMAIL=email;try{localStorage.setItem('kg.auth',JSON.stringify({email,until:Date.now()+864e5,keep:!!keep}));sessionStorage.setItem('kg.alive','1');}catch(e){}finishBoot();}
-async function finishBoot(){var _tb=document.getElementById('topbar');if(_tb)_tb.style.display='flex';toast('Carregando...');await loadCloud();CLOUD_READY=true;subscribeCloud();go('home');}
-async function doLogout(){try{localStorage.removeItem('kg.auth');sessionStorage.removeItem('kg.alive');}catch(e){}CLOUD_READY=false;CURRENT_EMAIL=null;if(sbClient){try{await sbClient.auth.signOut();}catch(e){}}renderLogin('Você saiu. Entre novamente para continuar.');}
+async function finishBoot(){var _tb=document.getElementById('topbar');if(_tb)_tb.style.display='flex';toast('Loading...');await loadCloud();CLOUD_READY=true;subscribeCloud();go('home');}
+async function doLogout(){try{localStorage.removeItem('kg.auth');sessionStorage.removeItem('kg.alive');}catch(e){}CLOUD_READY=false;CURRENT_EMAIL=null;if(sbClient){try{await sbClient.auth.signOut();}catch(e){}}renderLogin('You have signed out. Sign in again to continue.');}
 function changePwModal(){const ex=document.getElementById('cpwmodal');if(ex)ex.remove();const w=document.createElement('div');w.id='cpwmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
- w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:400px;text-align:left"><h2 style="color:var(--navy);font-size:19px">🔒 Trocar minha senha</h2>
-  <label class="fl">Nova senha</label><input class="inp" type="password" id="cpw_new" placeholder="mínimo 6 caracteres">
-  <div style="margin-top:12px"><button class="btn" onclick="saveNewPw()">💾 Salvar</button> <button class="btn ghost" onclick="document.getElementById('cpwmodal').remove()">Cancelar</button></div></div>`;
+ w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:400px;text-align:left"><h2 style="color:var(--navy);font-size:19px">🔒 Change my password</h2>
+  <label class="fl">New password</label><input class="inp" type="password" id="cpw_new" placeholder="minimum 6 characters">
+  <div style="margin-top:12px"><button class="btn" onclick="saveNewPw()">💾 Save</button> <button class="btn ghost" onclick="document.getElementById('cpwmodal').remove()">Cancel</button></div></div>`;
  document.body.appendChild(w);setTimeout(()=>{const e=$('#cpw_new');if(e)e.focus();},40);}
-async function saveNewPw(){const np=$('#cpw_new')?$('#cpw_new').value:'';if(!np||np.length<6){toast('⚠️ A senha precisa de ao menos 6 caracteres');return;}if(!sbClient)return;const r=await sbClient.auth.updateUser({password:np});if(r.error){toast('Erro ao trocar a senha');return;}const m=document.getElementById('cpwmodal');if(m)m.remove();toast('✅ Senha alterada');}
-async function bootApp(){if(!sbClient){renderLogin('Sem conexão com o servidor. Recarregue a página (F5).');return;}try{const s=await sbClient.auth.getSession();const session=s.data&&s.data.session;if(!session){renderLogin('');return;}const email=((session.user&&session.user.email)||'').toLowerCase();if(!email.endsWith('@'+ALLOWED_DOMAIN)){await sbClient.auth.signOut();renderLogin('Esta conta não é do domínio da escola.');return;}let kg={};try{kg=JSON.parse(localStorage.getItem('kg.auth')||'{}');}catch(e){}if(kg.keep){if(kg.until&&Date.now()>kg.until){await sbClient.auth.signOut();renderLogin('Sua sessão de 24h expirou. Entre novamente.');return;}}else{if(sessionStorage.getItem('kg.alive')!=='1'){await sbClient.auth.signOut();renderLogin('');return;}}CURRENT_EMAIL=email;finishBoot();}catch(e){renderLogin('');}}
+async function saveNewPw(){const np=$('#cpw_new')?$('#cpw_new').value:'';if(!np||np.length<6){toast('⚠️ Password must be at least 6 characters');return;}if(!sbClient)return;const r=await sbClient.auth.updateUser({password:np});if(r.error){toast('Error changing password');return;}const m=document.getElementById('cpwmodal');if(m)m.remove();toast('✅ Password changed');}
+async function bootApp(){if(!sbClient){renderLogin('No connection to the server. Please reload the page (F5).');return;}try{const s=await sbClient.auth.getSession();const session=s.data&&s.data.session;if(!session){renderLogin('');return;}const email=((session.user&&session.user.email)||'').toLowerCase();if(!email.endsWith('@'+ALLOWED_DOMAIN)){await sbClient.auth.signOut();renderLogin('This account is not from the school domain.');return;}let kg={};try{kg=JSON.parse(localStorage.getItem('kg.auth')||'{}');}catch(e){}if(kg.keep){if(kg.until&&Date.now()>kg.until){await sbClient.auth.signOut();renderLogin('Your 24-hour session has expired. Please sign in again.');return;}}else{if(sessionStorage.getItem('kg.alive')!=='1'){await sbClient.auth.signOut();renderLogin('');return;}}CURRENT_EMAIL=email;finishBoot();}catch(e){renderLogin('');}}
 
 function getClass(id){return CLASSES.find(c=>c.id===id);}
 function applyClassMeta(){
