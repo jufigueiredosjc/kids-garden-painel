@@ -688,7 +688,7 @@ function renderClass(id){
  if(c.fluent)return renderFluent(id);
  if(c.special==='cambridge')return renderCambridge(id);
  const tabs=[['overview','📊 Overview'],['report','📝 Daily Report']];
- if(c.track!=='phonics')tabs.push(['skills','🎯 Skills & Competencies']);
+ tabs.push(['skills','🎯 Skills & Competencies']);
  if(hasTests(c))tabs.push(['tests',(c.mock?'🧪 Mock Tests':'🧪 Unit Tests')]);
  tabs.push(['history','📖 Edit Reports']);
  if(!tabs.some(t=>t[0]===CLASS_TAB))CLASS_TAB='overview';
@@ -1323,6 +1323,7 @@ function tabSkillsPhonics(id){
        <td><input class="inp" style="min-width:260px;padding:6px 9px;${needObs?'border-color:var(--bad)':''}" value="${esc(obs)}" placeholder="Required — e.g. hears the sound, blends s-a-t, forms the letter" onchange="setPhonicsObs('${id}',${gi},${si},this.value)"></td></tr>`;}).join('')}
    </table></div>`;
  return `
+  ${kinderProjectCard(id)}
   <div class="card"><h3>🔡 Jolly Phonics assessment</h3>
    <div class="flag ok"><span class="fi">🧭</span><div><b>How it works:</b> the class teaches <b>one sound per day</b> following the Jolly Phonics order, then a <b>review</b> per group. Pick the group below, then for each child choose how they're <b>keeping up</b> and write a short <b>observation</b> (required). This mirrors the school's <i>Standard Teaching Guide for Phonics</i>, updated weekly.</div></div>
    <div class="unit-tabs" style="margin-top:10px">${groupTabs}</div>
@@ -1335,8 +1336,7 @@ function tabSkillsPhonics(id){
      <div class="tip"><div class="e">🔗</div><h4>Blending & segmenting</h4><p>Blends sounds to read (s-a-t → "sat") and breaks words into sounds to spell.</p></div>
      <div class="tip"><div class="e">✍️</div><h4>Letter formation</h4><p>Forms the letter correctly with the Jolly Phonics action; links sound to letter shape.</p></div>
      <div class="tip"><div class="e">⭐</div><h4>Tricky words</h4><p>Begins to recognise common tricky words by sight (I, the, he, she, me, we, be).</p></div>
-   </div></div>
-  ${kinderProjectCard(id)}`;
+   </div></div>`;
 }
 function setPhonicsObs(id,period,si,val){setSkill(id,period,si,'Observation',val);renderClass(id);}
 function setPeriod(i,id){CUR_PERIOD=i;renderClass(id);}
