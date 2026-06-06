@@ -243,6 +243,17 @@ function studentMeta(cid,name){const ov=(STATE.students||{})[cid+'::'+name];if(o
  return null;}
 function displayName(cid,name){const m=studentMeta(cid,name);return (m&&m.full)?m.full:name;}
 function dobOf(cid,name){const m=studentMeta(cid,name);return (m&&m.dob)?m.dob:'';}
+/* Cross-program enrollment: a child can be in a regular class AND in Fluent Steps / Cambridge.
+   We link records across classes by their full display name (safe — same child = same full name). */
+function classMemberNames(c){if(!c)return [];var names={};
+ try{(activeStudents(c)||[]).forEach(function(n){names[n]=1;});}catch(e){}
+ (((STATE.addedStudents||{})[c.id])||[]).forEach(function(n){names[n]=1;});
+ if(c.id==='fluent_steps'){var fr=(STATE.fluent||{}).roster||{};Object.keys(fr).forEach(function(sl){(fr[sl]||[]).forEach(function(n){names[n]=1;});});}
+ if(c.id==='cambridge_prep'){var cr=(STATE.camb||{}).roster||{};Object.keys(cr).forEach(function(lv){(cr[lv]||[]).forEach(function(n){names[n]=1;});});}
+ var out=[];Object.keys(names).forEach(function(n){if(!isArchived(c.id,n))out.push(n);});return out;}
+function childPrograms(cid,name){var target=displayName(cid,name);var out=[];(CLASSES||[]).forEach(function(c){try{if(classMemberNames(c).some(function(n){return displayName(c.id,n)===target;}))out.push(c.id);}catch(e){}});return out;}
+function programLabel(cid){if(cid==='fluent_steps')return 'Fluent Steps';if(cid==='cambridge_prep')return 'Cambridge Prep';var c=getClass(cid);return c?c.name:cid;}
+function programTagsHtml(cid,name){var ex=childPrograms(cid,name).filter(function(x){return x!==cid&&(x==='fluent_steps'||x==='cambridge_prep');});if(!ex.length)return '';return ' '+ex.map(function(x){return '<span class="badge" style="background:#1B4F86;color:#fff;font-size:10px;vertical-align:middle" title="Extra activity">'+(x==='fluent_steps'?'Fluent Steps':'Cambridge')+'</span>';}).join(' ');}
 function syncAdded(){CLASSES.forEach(c=>{const add=(STATE.addedStudents||{})[c.id]||[];add.forEach(n=>{if(!c.students.includes(n))c.students.push(n);});});}
 function migrateForCloud(){
  STATE.addedStudents=STATE.addedStudents||{};STATE.students=STATE.students||{};
@@ -801,7 +812,7 @@ function editSessionForm(id,i){
  else if(c.special==='cambridge'){names=cambRoster(s.level||'').slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else{names=[...c.students];Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  const ph=c.track==='phonics';
- const rows=names.map((n,k)=>{const r=(s.rows||{})[n]||{};return `<tr><td><b>${esc(displayName(id,n))}</b></td>
+ const rows=names.map((n,k)=>{const r=(s.rows||{})[n]||{};return `<tr><td><b>${esc(displayName(id,n))}</b>${programTagsHtml(id,n)}</td>
    <td><select class="att-sel" id="eatt_${k}">${ATT.map(a=>`<option ${(r.att||'Present')===a?'selected':''}>${a}</option>`).join('')}</select></td>
    ${fl?'':`<td><select class="att-sel" id="ehw_${k}">${HW.map(h=>`<option ${(r.hw||'')===h?'selected':''}>${h}</option>`).join('')}</select></td>`}
    ${(!fl&&c.kidDollar)?`<td><input class="inp" style="width:64px;padding:5px 8px" type="number" min="0" value="${Number(r.dollar)||0}" id="edol_${k}"></td>`:''}
@@ -1110,7 +1121,7 @@ function tabOverview(id){
    <p class="hint">Tap <b>Report</b> for a child's development charts & summary, or <b>History</b> for everything written about them.</p>
    <div class="tbl-wrap"><table><tr><th>Name</th><th>Attendance</th><th>Homework</th>${c.kidDollar?'<th>Kid\'s $</th>':''}<th>Developing</th><th>Status & why</th><th></th></tr>
    ${activeStudents(c).map(n=>{const st=studentStats(id,n);const weak=weakSkills(id,n);const a=att.find(x=>x.name===n);const ns=esc(n).replace(/'/g,"\\'");
-     const dob=dobOf(id,n);const bd=bdayDaysAway(dob);return `<tr><td><b>${esc(displayName(id,n))}</b>${bd===0?' 🎂':(dob&&bd!=null&&bd<=14?` <span class="muted small">🎂 ${esc(fmtBday(dob))}</span>`:'')}</td>
+     const dob=dobOf(id,n);const bd=bdayDaysAway(dob);return `<tr><td><b>${esc(displayName(id,n))}</b>${programTagsHtml(id,n)}${bd===0?' 🎂':(dob&&bd!=null&&bd<=14?` <span class="muted small">🎂 ${esc(fmtBday(dob))}</span>`:'')}</td>
        <td>${st.attRate==null?'<span class="muted">—</span>':`<span class="badge ${st.attRate>=80?'b-present':st.attRate>=60?'b-late':'b-absent'}">${st.attRate}%</span>`} <span class="muted small">${st.p}P/${st.l}L/${st.a}A</span></td>
        <td>${st.hwRate==null?'<span class="muted">—</span>':`<span class="badge ${st.hwRate>=80?'b-present':st.hwRate>=60?'b-late':'b-absent'}">${st.hwRate}%</span>`}</td>
        ${c.kidDollar?`<td>${(kd&&kd.expected>0)?`<span class="badge ${st.dollars<kd.target?'b-late':'b-present'}">$${st.dollars}</span>${st.dollars<kd.target?` <span class="muted small">/ $${kd.expected}</span>`:''}`:`$${st.dollars}`} <button class="btn ghost sm no-print" title="Edit Kid's Dollars" onclick="editDollarModal('${id}','${ns}')">✏️</button></td>`:''}
@@ -1143,7 +1154,7 @@ function tabOverview(id){
 function tabReport(id){
  const c=getClass(id);const items=trackItems(c);
  const ph=c.track==='phonics';const ros=activeStudents(c);
- const rows=ros.map((n,i)=>`<tr><td><b>${esc(displayName(id,n))}</b></td>
+ const rows=ros.map((n,i)=>`<tr><td><b>${esc(displayName(id,n))}</b>${programTagsHtml(id,n)}</td>
    <td><select class="att-sel" id="att_${i}">${ATT.map(a=>`<option ${a==='Present'?'selected':''}>${a}</option>`).join('')}</select></td>
    <td><select class="att-sel" id="hw_${i}">${HW.map(h=>`<option>${h}</option>`).join('')}</select></td>
    ${c.kidDollar?`<td><input class="inp" style="width:64px;padding:5px 8px" type="number" min="0" value="0" id="dol_${i}"></td>`:''}
@@ -2081,6 +2092,7 @@ function studentReport(cid,name){
  const set=SKILLSETS[c.level]||[];
  $("#stbody").innerHTML=`
   ${att?`<div class="flag warn"><span class="fi">🔎</span><div><b>Needs attention:</b> ${att.reasons.map(esc).join(' · ')}</div></div>`:`<div class="flag ok"><span class="fi">✅</span><div><b>${esc(name)} is on track.</b></div></div>`}
+  ${(()=>{const others=childPrograms(cid,name).filter(x=>x!==cid);if(!others.length)return '';return `<div class="card" style="border-color:#9FB8DC;background:linear-gradient(120deg,#EAF1FB,#F7FAFF)"><h3>🌟 Also enrolled in</h3><p class="hint">Beyond ${esc(programLabel(cid))}, this child also takes part in:</p><div>${others.map(x=>`<span class="pill" style="background:#1B4F86;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">${esc(programLabel(x))}</span>`).join('')}</div></div>`;})()}
   <div class="card"><h3>📊 Snapshot</h3>
    <div class="stat-grid">
      <div class="stat blue"><div class="n">${st.attRate==null?'—':st.attRate+'%'}</div><div class="l">Attendance</div></div>
