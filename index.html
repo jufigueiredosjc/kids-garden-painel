@@ -251,7 +251,10 @@ function classMemberNames(c){if(!c)return [];var names={};
  if(c.id==='fluent_steps'){var fr=(STATE.fluent||{}).roster||{};Object.keys(fr).forEach(function(sl){(fr[sl]||[]).forEach(function(n){names[n]=1;});});}
  if(c.id==='cambridge_prep'){var cr=(STATE.camb||{}).roster||{};Object.keys(cr).forEach(function(lv){(cr[lv]||[]).forEach(function(n){names[n]=1;});});}
  var out=[];Object.keys(names).forEach(function(n){if(!isArchived(c.id,n))out.push(n);});return out;}
-function childPrograms(cid,name){var target=displayName(cid,name);var out=[];(CLASSES||[]).forEach(function(c){try{if(classMemberNames(c).some(function(n){return displayName(c.id,n)===target;}))out.push(c.id);}catch(e){}});return out;}
+function _normName(s){return (s||'').trim().toLowerCase().replace(/\s+/g,' ');}
+function sameChild(cidA,nA,cidB,nB){if(_normName(displayName(cidA,nA))!==_normName(displayName(cidB,nB)))return false;var da=dobOf(cidA,nA),db=dobOf(cidB,nB);if(da&&db&&da!==db)return false;return true;}
+function childPrograms(cid,name){var out=[];(CLASSES||[]).forEach(function(c){try{if(classMemberNames(c).some(function(n){return sameChild(cid,name,c.id,n);}))out.push(c.id);}catch(e){}});return out;}
+function fluentClassesCount(cid,name){var arr=(STATE.sessions||{}).fluent_steps||[];var names=classMemberNames(getClass('fluent_steps')||{id:'fluent_steps'});var key=null;names.some(function(n){if(sameChild(cid,name,'fluent_steps',n)){key=n;return true;}return false;});if(!key)return 0;var n=0;arr.forEach(function(s){var r=(s.rows||{})[key];if(r&&(r.att==='Present'||r.att==='Late'))n++;});return n;}
 function programLabel(cid){if(cid==='fluent_steps')return 'Fluent Steps';if(cid==='cambridge_prep')return 'Cambridge Prep';var c=getClass(cid);return c?c.name:cid;}
 function programTagsHtml(cid,name){var ex=childPrograms(cid,name).filter(function(x){return x!==cid&&(x==='fluent_steps'||x==='cambridge_prep');});if(!ex.length)return '';return ' '+ex.map(function(x){return '<span class="badge" style="background:#1B4F86;color:#fff;font-size:10px;vertical-align:middle" title="Extra activity">'+(x==='fluent_steps'?'Fluent Steps':'Cambridge')+'</span>';}).join(' ');}
 function syncAdded(){CLASSES.forEach(c=>{const add=(STATE.addedStudents||{})[c.id]||[];add.forEach(n=>{if(!c.students.includes(n))c.students.push(n);});});}
@@ -2081,6 +2084,49 @@ function phonicsProgressCard(cid,name){
    <p class="small"><b>${list.length}</b> sound${list.length>1?'s':''} practised · <b>${sec}</b> ✍️ secure · <b>${bl}</b> 🔗 blending · <b>${rec}</b> 👂 recognising${ns?` · <b>${ns}</b> ◻ need support`:''}</p>
    <div class="phchips">${chips}</div>
    <p class="small muted" style="margin-top:8px">Each chip = a sound. Badge = overall level. Small icons = skills seen (👂 hears · 🗣 says · ✍️ forms the letter · 🔗 blends to read; faded = not yet).</p></div>`;}
+/* Auto pedagogical orientation — reads the structured signals + the teacher's own written
+   observations (theme detection) and returns a brief, neuroscience-based steer for the teacher.
+   Supports, never replaces, the teacher's judgement. Generated client-side; nothing is stored. */
+function pedagogicalOrientation(cid,name){
+ const c=getClass(cid);const st=studentStats(cid,name);const seen=st.seen||0;if(!seen)return null;
+ const weak=weakSkills(cid,name),strong=strongSkills(cid,name);
+ const rows=studentRows(cid,name);
+ const obs=rows.map(function(r){return r.obs||'';}).join(' ').toLowerCase();
+ let focus=[],actions=[],strengths=[];
+ const T=[
+  {k:['shy','quiet','timid','reluctant','afraid','nervous','soft voice','spoke softly','low voice'],f:'speaking confidence',a:'Lower the affective filter with predictable sentence frames and pair work, so output feels safe and becomes automatic through repetition.'},
+  {k:['distract','off task','off-task','restless','fidget','lose focus','short attention','wandering','difficulty focus','hard to focus','attention span'],f:'attention & focus',a:'Chunk tasks into short, multisensory bursts with movement breaks — young brains consolidate through spaced, varied repetition rather than long blocks.'},
+  {k:['vocabulary','new words','word bank','lexical','remember the word','forgot the word'],f:'vocabulary retention',a:'Recycle target words in meaningful contexts across several classes (retrieval practice) to move them into long-term memory.'},
+  {k:['phonic','blend','sound','decod','satpin','letter sound','segment'],f:'phonics & decoding',a:'Keep phonics multisensory (see–say–trace–blend) and consolidate each sound with quick daily retrieval before adding the next.'},
+  {k:['writing','spelling','letter formation','handwriting','cursive'],f:'writing & encoding',a:'Rehearse orally first, then model and scaffold before independent writing — production follows comprehension.'},
+  {k:['listening','comprehension','follow instruction','understand instruction','did not understand','does not understand'],f:'listening comprehension',a:'Anchor input with gesture, visuals and slower repeated modelling before demanding language back.'},
+  {k:['peer','classmate','conflict','behavior','behaviour','talking to','influenced','distracted by'],f:'social regulation',a:'Channel social energy with structured pair/group roles and strategic seating so interaction fuels learning instead of pulling focus.'},
+  {k:['struggl','difficult','needs support','need help','confused','help remember','hard time'],f:'scaffolded support',a:'Use visuals and worked examples, then gradually release responsibility, checking understanding with quick low-stakes retrieval.'}
+ ];
+ T.forEach(function(t){if(t.k.some(function(w){return obs.indexOf(w)>=0;})){focus.push(t.f);actions.push(t.a);}});
+ const P=[
+  {k:['independ','autonom','minimal support','on her own','on his own','by himself','by herself','no support','all on'],s:'works with strong autonomy'},
+  {k:['participat','engag','eager','enthusiastic','very active','volunteer','confident','excellent','amazing'],s:'engages with enthusiasm'},
+  {k:['read with no support','reads well','can read','reads independently'],s:'reading ahead of expectations'}
+ ];
+ P.forEach(function(p){if(p.k.some(function(w){return obs.indexOf(w)>=0;}))strengths.push(p.s);});
+ if(st.attRate!=null&&st.attRate<75&&seen>=3){focus.unshift('attendance consistency');actions.unshift('Language is built by frequent, spaced exposure, so protecting attendance will do more for progress than any single lesson.');}
+ if(!c.fluent&&st.hwRate!=null&&st.hwRate<60&&(st.hd+st.hm)>=2){focus.push('home reinforcement');actions.push('When homework is set, keep it short and playful so it reinforces class content and consolidates memory at home.');}
+ weak.slice(0,2).forEach(function(w){focus.push(w.toLowerCase());});
+ strong.slice(0,2).forEach(function(s){strengths.push('a solid command of '+s.toLowerCase());});
+ function uniq(a){var o=[],sn={};a.forEach(function(x){var k=x.toLowerCase();if(!sn[k]){sn[k]=1;o.push(x);}});return o;}
+ focus=uniq(focus).slice(0,3);actions=uniq(actions).slice(0,2);strengths=uniq(strengths).slice(0,2);
+ const first=esc((displayName(cid,name)||name).split(' ')[0]);
+ const eng=strengths.length?('shows '+esc(strengths[0])):'is still settling into a clear pattern';
+ let profile=first+' '+eng;
+ if(st.attRate!=null)profile+=', with attendance around '+st.attRate+'% over '+seen+' recorded class'+(seen===1?'':'es');
+ profile+='.';
+ const focusTxt=focus.length?('<b>Where to focus:</b> '+focus.map(esc).join(', ')+'.'):'<b>Where to focus:</b> keep building all four skills through varied, meaningful input.';
+ const actTxt=actions.length?('<b>What to do:</b> '+actions.map(esc).join(' ')):'<b>What to do:</b> prioritise comprehensible, meaningful input and frequent low-stakes retrieval.';
+ const strTxt=strengths.length?(' <b>Leverage:</b> the child '+esc(strengths[0])+' — use that as the entry point for harder tasks.'):'';
+ return profile+' '+focusTxt+' '+actTxt+strTxt;
+}
+function pedagogicalOrientationCard(cid,name){const t=pedagogicalOrientation(cid,name);if(!t)return '';return `<div class="card" style="border:2px solid #1B4F86;background:linear-gradient(120deg,#F1F7FF,#FFFDF6)"><h3>🧠 Teacher's orientation — neuroscience-based</h3><p class="hint">A brief, automatic reading of everything recorded about this child (including your own observations), to help you aim your work. It supports — never replaces — your judgement.</p><p style="line-height:1.65;font-size:15px">${t}</p></div>`;}
 function studentReport(cid,name){
  const c=getClass(cid);const st=studentStats(cid,name);const rows=studentRows(cid,name);const tests=studentTests(cid,name);
  const noneHw=rows.filter(r=>r.hw==='No homework').length;
@@ -2092,7 +2138,13 @@ function studentReport(cid,name){
  const set=SKILLSETS[c.level]||[];
  $("#stbody").innerHTML=`
   ${att?`<div class="flag warn"><span class="fi">🔎</span><div><b>Needs attention:</b> ${att.reasons.map(esc).join(' · ')}</div></div>`:`<div class="flag ok"><span class="fi">✅</span><div><b>${esc(name)} is on track.</b></div></div>`}
-  ${(()=>{const others=childPrograms(cid,name).filter(x=>x!==cid);if(!others.length)return '';return `<div class="card" style="border-color:#9FB8DC;background:linear-gradient(120deg,#EAF1FB,#F7FAFF)"><h3>🌟 Also enrolled in</h3><p class="hint">Beyond ${esc(programLabel(cid))}, this child also takes part in:</p><div>${others.map(x=>`<span class="pill" style="background:#1B4F86;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">${esc(programLabel(x))}</span>`).join('')}</div></div>`;})()}
+  ${(()=>{const others=childPrograms(cid,name).filter(x=>x!==cid);if(!others.length)return '';
+    const parts=others.map(x=>{
+      if(x==='fluent_steps'){const n=fluentClassesCount(cid,name);return `<span class="pill" style="background:#1B4F86;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">🌍 Fluent Steps — ${n} class${n===1?'':'es'} attended</span>`;}
+      if(x==='cambridge_prep')return `<span class="pill" style="background:#6A1B9A;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">🎓 Cambridge Prep</span>`;
+      return `<span class="pill" style="background:#37474F;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">${esc(programLabel(x))}</span>`;
+    });
+    return `<div class="card" style="border-color:#9FB8DC;background:linear-gradient(120deg,#EAF1FB,#F7FAFF)"><h3>🌟 Extra activities</h3><p class="hint">Cross-referenced by name + date of birth. Beyond ${esc(programLabel(cid))}, this child also takes part in:</p><div>${parts.join('')}</div>${others.indexOf('cambridge_prep')>=0?'<p class="small muted" style="margin-top:6px">Cambridge Prep: enrolment shown for reference — class-by-class history is not fully tracked here.</p>':''}</div>`;})()}
   <div class="card"><h3>📊 Snapshot</h3>
    <div class="stat-grid">
      <div class="stat blue"><div class="n">${st.attRate==null?'—':st.attRate+'%'}</div><div class="l">Attendance</div></div>
@@ -2119,7 +2171,8 @@ function studentReport(cid,name){
   <div class="card"><h3>📝 Recent observations</h3>
    ${recent.length?`<ul style="margin:0 0 0 18px">${recent.map(o=>`<li class="small" style="margin-bottom:6px"><b>${esc(o.date||'')}:</b> ${esc(o.obs)}</li>`).join('')}</ul>`:'<p class="muted small">No written observations yet.</p>'}
    <button class="btn ghost sm" style="margin-top:10px" onclick="openStudent('${cid}','${esc(name).replace(/'/g,"\\'")}','history')">📜 See full history →</button>
-  </div>`;
+  </div>
+  ${pedagogicalOrientationCard(cid,name)}`;
  // charts
  setTimeout(()=>{if(!window.Chart)return;
   const dough=(id,labels,data,colors)=>{const el=$("#"+id);if(!el)return;new Chart(el,{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});};
