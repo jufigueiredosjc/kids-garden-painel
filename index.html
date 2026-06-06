@@ -275,6 +275,22 @@ function addStudentModal(cid){const ex=document.getElementById('asmodal');if(ex)
 function addStudentConfirm(cid){const f=($("#as_full").value||'').trim();if(!f){toast('Enter a name');return;}const dob=($("#as_dob").value||'').trim();
  STATE.addedStudents=STATE.addedStudents||{};STATE.addedStudents[cid]=STATE.addedStudents[cid]||[];if(!STATE.addedStudents[cid].includes(f))STATE.addedStudents[cid].push(f);
  STATE.students=STATE.students||{};STATE.students[cid+'::'+f]={full:f,dob};syncAdded();save();const m=document.getElementById('asmodal');if(m)m.remove();toast('✅ Student added');render();}
+/* Coordination: add a student from the Manage children list (pick the class too). */
+function addStudentCoordModal(){const ex=document.getElementById('ascmodal');if(ex)ex.remove();
+ const opts=CLASSES.filter(c=>!c.fluent&&c.special!=='cambridge').map(c=>`<option value="${c.id}">${esc(c.name)}${c.time?(' · '+esc(c.time)):''}</option>`).join('');
+ const w=document.createElement('div');w.id='ascmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box" style="border-color:var(--green);max-width:440px;text-align:left"><h2 style="color:var(--green-d);font-size:19px">➕ Add a student</h2>
+   <label class="fl">Full name</label><input class="inp" id="asc_full" placeholder="Child's full name">
+   <label class="fl" style="margin-top:8px">Class</label><select class="inp" id="asc_class">${opts}</select>
+   <label class="fl" style="margin-top:8px">Date of birth</label><input class="inp" type="date" id="asc_dob">
+   <div style="margin-top:12px"><button class="btn" onclick="addStudentCoordConfirm()">💾 Save</button>
+   <button class="btn ghost" onclick="document.getElementById('ascmodal').remove()">Cancel</button></div></div>`;
+ document.body.appendChild(w);setTimeout(()=>{const e=$("#asc_full");if(e)e.focus();},40);}
+function addStudentCoordConfirm(){const f=($("#asc_full").value||'').trim();if(!f){toast('Enter the full name');return;}const cid=$("#asc_class")?$("#asc_class").value:'';if(!cid){toast('Pick a class');return;}const dob=($("#asc_dob").value||'').trim();
+ STATE.addedStudents=STATE.addedStudents||{};STATE.addedStudents[cid]=STATE.addedStudents[cid]||[];if(STATE.addedStudents[cid].indexOf(f)<0)STATE.addedStudents[cid].push(f);
+ STATE.students=STATE.students||{};STATE.students[cid+'::'+f]={full:f,dob:dob};
+ if(STATE.tombstones)delete STATE.tombstones['stu|'+cid+'|'+f];
+ try{syncAdded();}catch(e){}save();const m=document.getElementById('ascmodal');if(m)m.remove();toast('✅ Student added — saved');render();}
 function isArchived(cid,name){return !!((STATE.archived||{})[cid+'::'+name]);}
 function archInfo(cid,name){return (STATE.archived||{})[cid+'::'+name];}
 function activeStudents(c){return (c.students||[]).filter(n=>!isArchived(c.id,n));}
@@ -1811,7 +1827,8 @@ function coordBirthdays(){
    ${soon.length?`<div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>When</th><th>Turning</th></tr>${soon.map(row).join('')}</table></div>`:'<p class="muted small">No birthdays in the next 30 days.</p>'}</div>
   ${(()=>{const all=allStudentsAdmin();return `<div class="card"><h3>👧 Manage children</h3>
    <p class="hint">Every child on the panel. Use <b>✏️ Modify</b> to rename, fix the birthday or move the child to another class (records follow the move), or <b>🗑 Delete</b> to remove them. ${all.length} children.</p>
-   <div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Turning</th><th>Actions</th></tr>${all.map(s=>{const ns=esc(s.name).replace(/'/g,"\\'");const age=ageTurning(s.dob);return `<tr><td><b>${esc(s.full)}</b></td><td>${esc(s.className)}</td><td>${s.dob?('🎂 '+esc(fmtBday(s.dob))):'<span class="muted small">—</span>'}</td><td>${age!=null?('turns '+age):'<span class="muted small">—</span>'}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="editStudentModal('${s.cid}','${ns}')">✏️ Modify</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteStudentPermanently('${s.cid}','${ns}')">🗑 Delete</button></td></tr>`;}).join('')}</table></div></div>`;})()}`;
+   <div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Turning</th><th>Actions</th></tr>${all.map(s=>{const ns=esc(s.name).replace(/'/g,"\\'");const age=ageTurning(s.dob);return `<tr><td><b>${esc(s.full)}</b></td><td>${esc(s.className)}</td><td>${s.dob?('🎂 '+esc(fmtBday(s.dob))):'<span class="muted small">—</span>'}</td><td>${age!=null?('turns '+age):'<span class="muted small">—</span>'}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="editStudentModal('${s.cid}','${ns}')">✏️ Modify</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteStudentPermanently('${s.cid}','${ns}')">🗑 Delete</button></td></tr>`;}).join('')}</table></div>
+   <button class="btn" style="margin-top:12px" onclick="addStudentCoordModal()">➕ Add a student</button></div>`;})()}`;
 }
 function coordMsgBanner(){
  let cards='';
