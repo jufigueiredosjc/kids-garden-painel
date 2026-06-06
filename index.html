@@ -294,13 +294,28 @@ function deleteStudentPermanently(cid,name){const dn=displayName(cid,name);
 function archivedList(){const A=STATE.archived||{};return Object.keys(A).map(k=>{const i=k.indexOf('::');const cid=k.slice(0,i),name=k.slice(i+2);const c=getClass(cid);return {cid,name,className:c?c.name:cid,date:A[k].date,days:daysSince(A[k].date)};}).sort((a,b)=>b.days-a.days);}
 function exportStudentRecord(cid,name){const c=getClass(cid);const rec={student:displayName(cid,name),classRecordName:name,class:c?c.name:cid,dob:dobOf(cid,name),archivedOn:(archInfo(cid,name)||{}).date,sessions:sessionsOf(cid).filter(s=>(s.rows||{})[name]).map(s=>({date:s.date,slot:s.slot,theme:s.theme,...(s.rows[name])})),tests:(studentTests?studentTests(cid,name):[]),coordNotes:(coordNotesOf?coordNotesOf(cid,name):[])};
  const blob=new Blob([JSON.stringify(rec,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=('record-'+displayName(cid,name)+'.json').replace(/[^a-z0-9.\-]+/gi,'_');a.click();toast('⬇️ Record downloaded — save it to Drive');}
-function saveStudentMeta(cid,name){const f=($("#sm_full").value||'').trim();const dob=($("#sm_dob").value||'').trim();STATE.students=STATE.students||{};STATE.students[cid+'::'+name]={full:f||name,dob:dob};save();const m=document.getElementById('smmodal');if(m)m.remove();toast('✅ Saved');render();}
-function editStudentModal(cid,name){const m=studentMeta(cid,name)||{};const ex=document.getElementById('smmodal');if(ex)ex.remove();
+/* Move a child (and all their records) from one class to another. Used by the Modify dialog. */
+function moveStudentToClass(oldCid,name,newCid){if(!oldCid||!newCid||oldCid===newCid)return;
+ STATE.sessions=STATE.sessions||{};var oldS=STATE.sessions[oldCid]||[];var newS=STATE.sessions[newCid]=STATE.sessions[newCid]||[];
+ var byKey={};newS.forEach(function(s){byKey[(s.date||'')+'|'+(s.slot||'')]=s;});
+ oldS.forEach(function(s){if(!s.rows||s.rows[name]===undefined)return;var k=(s.date||'')+'|'+(s.slot||'');var ns=byKey[k];if(!ns){ns={date:s.date,slot:s.slot||'',theme:'',high:'',improve:'',rows:{}};newS.push(ns);byKey[k]=ns;}ns.rows=ns.rows||{};if(ns.rows[name]===undefined)ns.rows[name]=s.rows[name];delete s.rows[name];});
+ newS.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+ STATE.addedStudents=STATE.addedStudents||{};STATE.addedStudents[newCid]=STATE.addedStudents[newCid]||[];if(STATE.addedStudents[newCid].indexOf(name)<0)STATE.addedStudents[newCid].push(name);if(STATE.addedStudents[oldCid])STATE.addedStudents[oldCid]=STATE.addedStudents[oldCid].filter(function(n){return n!==name;});
+ ['students','archived','dollarAdj','coordNotes'].forEach(function(kk){var o=STATE[kk];if(!o)return;var ok=oldCid+'::'+name,nk=newCid+'::'+name;if(o[ok]!==undefined){o[nk]=o[ok];delete o[ok];}});
+ var sk=STATE.skills;if(sk&&sk[oldCid]){sk[newCid]=sk[newCid]||{};Object.keys(sk[oldCid]).forEach(function(per){var pm=sk[oldCid][per];if(pm&&pm[name]!==undefined){sk[newCid][per]=sk[newCid][per]||{};sk[newCid][per][name]=pm[name];delete pm[name];}});}
+ tombstone('stu|'+oldCid+'|'+name);}
+function saveStudentMeta(cid,name){const f=($("#sm_full").value||'').trim();const dob=($("#sm_dob").value||'').trim();const sel=$("#sm_class");const newCid=sel?sel.value:cid;
+ let tCid=cid;
+ if(newCid&&newCid!==cid){const oc=getClass(cid),nc=getClass(newCid);if(!confirm('Move '+(f||name)+' from '+((oc&&oc.name)||cid)+' to '+((nc&&nc.name)||newCid)+'?\n\nThe child and ALL their records (reports, notes, skills) move to the new class.'))return;moveStudentToClass(cid,name,newCid);tCid=newCid;}
+ STATE.students=STATE.students||{};STATE.students[tCid+'::'+name]={full:f||name,dob:dob};save();const mo=document.getElementById('smmodal');if(mo)mo.remove();toast('✅ Saved');render();}
+function editStudentModal(cid,name){const m=studentMeta(cid,name)||{};const c=getClass(cid);const isReg=!!(c&&!c.fluent&&c.special!=='cambridge');const ex=document.getElementById('smmodal');if(ex)ex.remove();
+ const moveOpts=isReg?CLASSES.filter(x=>!x.fluent&&x.special!=='cambridge').map(x=>`<option value="${x.id}" ${x.id===cid?'selected':''}>${esc(x.name)}${x.time?(' · '+esc(x.time)):''}</option>`).join(''):'';
  const w=document.createElement('div');w.id='smmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
- w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:420px;text-align:left"><h2 style="color:var(--navy);font-size:19px">✏️ Name & birthday</h2>
+ w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:440px;text-align:left"><h2 style="color:var(--navy);font-size:19px">✏️ Modify child</h2>
    <p class="small muted">Class record name: <b>${esc(name)}</b></p>
-   <label class="fl">Full name</label><input class="inp" id="sm_full" value="${esc(m.full||name)}">
-   <label class="fl" style="margin-top:8px">Date of birth</label><input class="inp" type="date" id="sm_dob" value="${esc(m.dob||'')}">
+   <label class="fl">Rename (full name)</label><input class="inp" id="sm_full" value="${esc(m.full||name)}">
+   <label class="fl" style="margin-top:8px">Birthday</label><input class="inp" type="date" id="sm_dob" value="${esc(m.dob||'')}">
+   ${isReg?`<label class="fl" style="margin-top:8px">Class</label><select class="inp" id="sm_class">${moveOpts}</select><p class="small muted" style="margin-top:4px">Changing the class <b>moves the child and all their records</b> (reports, notes, skills) to the new class.</p>`:`<p class="small muted" style="margin-top:8px">This is a ${esc(c?c.name:'special')} record — class change isn't available here.</p>`}
    <div style="margin-top:12px"><button class="btn" onclick="saveStudentMeta('${cid}','${esc(name).replace(/'/g,"\\'")}')">💾 Save</button>
    <button class="btn ghost" onclick="document.getElementById('smmodal').remove()">Cancel</button></div></div>`;
  document.body.appendChild(w);setTimeout(()=>{const e=$("#sm_full");if(e)e.focus();},40);}
@@ -309,7 +324,10 @@ function bdayDaysAway(dob){if(!dob)return null;const t=new Date();const today=ne
 function ageTurning(dob){if(!dob)return null;const p=dob.split('-');if(p.length!==3)return null;const t=new Date();let yr=t.getFullYear();const bd=new Date(yr,Number(p[1])-1,Number(p[2]));if(bd<new Date(t.getFullYear(),t.getMonth(),t.getDate()))yr++;return yr-Number(p[0]);}
 function allBirthdays(){const seen={};const out=[];CLASSES.forEach(c=>{(c.students||[]).forEach(n=>{if(isArchived(c.id,n))return;const dob=dobOf(c.id,n);if(!dob)return;const full=displayName(c.id,n);if(seen[full])return;seen[full]=1;out.push({full,dob,classId:c.id,className:c.name,days:bdayDaysAway(dob),age:ageTurning(dob)});});});return out;}
 function birthdaysToday(){return allBirthdays().filter(b=>b.days===0);}
-function allStudentsAdmin(){const out=[];const seen={};CLASSES.forEach(c=>{activeStudents(c).forEach(n=>{const full=displayName(c.id,n);const key=full.trim().toLowerCase();if(seen[key])return;seen[key]=1;out.push({cid:c.id,name:n,full,dob:dobOf(c.id,n),className:c.name});});});return out.sort((a,b)=>a.full.localeCompare(b.full));}
+function allStudentsAdmin(){const out=[];const seen={};
+ const order=CLASSES.slice().sort((a,b)=>(((a.fluent||a.special==='cambridge')?1:0)-((b.fluent||b.special==='cambridge')?1:0)));
+ order.forEach(c=>{activeStudents(c).forEach(n=>{const full=displayName(c.id,n);const key=full.trim().toLowerCase();if(seen[key])return;seen[key]=1;out.push({cid:c.id,name:n,full,dob:dobOf(c.id,n),className:c.name});});});
+ return out.sort((a,b)=>a.full.localeCompare(b.full));}
 
 /* skill sets by level */
 const SKILLSETS={
@@ -1791,12 +1809,9 @@ function coordBirthdays(){
   ${today.length?`<div class="card" style="border-color:#FBE4A8;background:linear-gradient(120deg,#FFF7E0,#FFEFE2)"><h3>🎂 Today</h3><p>${today.map(b=>`<b>${esc(b.full)}</b> (${esc(b.className)}) turns <b>${b.age}</b>! 🎉`).join(' · ')}</p></div>`:''}
   <div class="card"><h3>🎂 Upcoming birthdays (next 30 days)</h3>
    ${soon.length?`<div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>When</th><th>Turning</th></tr>${soon.map(row).join('')}</table></div>`:'<p class="muted small">No birthdays in the next 30 days.</p>'}</div>
-  <div class="card"><h3>📅 All birthdays</h3>
-   <p class="hint">${list.length} children with a registered birthday.</p>
-   <div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Next</th><th>Turning</th></tr>${list.slice().sort((a,b)=>fmtBday(a.dob).split('/').reverse().join('').localeCompare(fmtBday(b.dob).split('/').reverse().join(''))).map(row).join('')}</table></div></div>
   ${(()=>{const all=allStudentsAdmin();return `<div class="card"><h3>👧 Manage children</h3>
-   <p class="hint">Rename a child (or fix the spelling of their name and birthday), or permanently remove them from the panel. Every change is saved to the cloud for everyone. ${all.length} children.</p>
-   <div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Actions</th></tr>${all.map(s=>{const ns=esc(s.name).replace(/'/g,"\\'");return `<tr><td><b>${esc(s.full)}</b></td><td>${esc(s.className)}</td><td>${s.dob?('🎂 '+esc(fmtBday(s.dob))):'<span class="muted small">—</span>'}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="editStudentModal('${s.cid}','${ns}')">✏️ Rename / birthday</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteStudentPermanently('${s.cid}','${ns}')">🗑 Delete</button></td></tr>`;}).join('')}</table></div></div>`;})()}`;
+   <p class="hint">Every child on the panel. Use <b>✏️ Modify</b> to rename, fix the birthday or move the child to another class (records follow the move), or <b>🗑 Delete</b> to remove them. ${all.length} children.</p>
+   <div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Turning</th><th>Actions</th></tr>${all.map(s=>{const ns=esc(s.name).replace(/'/g,"\\'");const age=ageTurning(s.dob);return `<tr><td><b>${esc(s.full)}</b></td><td>${esc(s.className)}</td><td>${s.dob?('🎂 '+esc(fmtBday(s.dob))):'<span class="muted small">—</span>'}</td><td>${age!=null?('turns '+age):'<span class="muted small">—</span>'}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="editStudentModal('${s.cid}','${ns}')">✏️ Modify</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteStudentPermanently('${s.cid}','${ns}')">🗑 Delete</button></td></tr>`;}).join('')}</table></div></div>`;})()}`;
 }
 function coordMsgBanner(){
  let cards='';
