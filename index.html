@@ -720,12 +720,14 @@ function cardForClass(c){
  else if(od.overdue)status=`<span class="pill warn">⏰ ${od.missing} pending</span>`;
  else status=`<span class="pill ok">✓ Up to date</span>`;
  const att=attentionList(c.id).length;
+ const pend=(function(){try{return pendingObs(c.id).length;}catch(e){return 0;}})();
  return `<button class="class-card" onclick="go('class','${c.id}')">
    <div class="bar" style="background:${L.color}"></div>
    <span class="lvl" style="background:${L.color}">${esc(c.name)}</span>
    <h3>${esc(c.name)} · ${esc(c.time)}</h3>
    <div class="meta">👤 ${esc(c.teacher)}<br>📅 ${esc(c.days)} · ${(c.age||L.age)}${c.online?' · 🖥 Mon online (optional)':''}</div>
-   <div class="foot">${status}${att?`<span class="pill bad">${att} need attention</span>`:''}<span class="pill">${c.students.length} ${c.count?'students':'participants'}</span></div>
+   <div class="foot">${status}${pend?`<span class="pill" style="background:#FFEB3B;color:#000;border-color:#FBC02D;font-weight:800">🚨 ${pend} report${pend>1?'s':''} need notes!</span>`:''}</div>
+   <div class="foot"><span class="pill">${c.students.length} ${c.count?'students':'participants'}</span>${att?`<span class="pill bad">🔎 ${att} need attention</span>`:''}</div>
  </button>`;
 }
 
