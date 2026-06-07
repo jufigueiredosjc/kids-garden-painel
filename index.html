@@ -164,6 +164,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:16px 0}
   <button class="tb-btn" onclick="go('home')">🏠 Home</button>
   <button class="tb-btn" onclick="go('learning')">💡 Learning Hub</button>
   <button class="tb-btn" onclick="go('coord')">🔒 Coordination</button>
+  <span id="onlineNow" class="no-print" title="People with the dashboard open right now" style="display:none;margin-left:8px;font-size:12px;color:#1B4F86;font-weight:700;background:#E6EFFC;border:1px solid #9FB8DC;border-radius:12px;padding:3px 10px;white-space:nowrap"></span>
 </div>
 <div class="wrap" id="app"></div>
 <div class="toast" id="toast"></div>
@@ -523,6 +524,21 @@ async function cloudSave(){if(!sbClient)return;try{
 function mergeState(raw){const b=blank();const s=Object.assign(b,raw||{});s.patches=s.patches||[];return s;}
 async function loadCloud(){if(!sbClient)return;try{const r=await sbClient.from('app_state').select('data').eq('id',1).single();if(r.error){console.warn('loadCloud',r.error.message);return;}const raw=r.data&&r.data.data;const empty=!(raw&&Object.keys(raw).length);if(!empty){STATE=mergeState(raw);}try{applyPatches(STATE);}catch(e){}if(empty){try{migrateForCloud();}catch(e){}}try{applyClassMeta();}catch(e){}try{syncAdded();}catch(e){}cloudSave();}catch(e){console.warn(e);}}
 function subscribeCloud(){if(!sbClient)return;try{sbClient.channel('app_state_rt').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state'},payload=>{const row=payload&&payload.new;if(row&&row.updated_by!==CURRENT_EMAIL&&row.data){STATE=mergeState(row.data);try{applyClassMeta();}catch(e){}render();}}).subscribe();}catch(e){}}
+/* ===== Online-now presence (Supabase Realtime Presence) ===== */
+let PRESENCE_CH=null;
+function _shortName(e){return (e||'').split('@')[0];}
+function renderOnline(list){var el=document.getElementById('onlineNow');if(!el)return;
+ if(!list||!list.length){el.style.display='none';el.textContent='';return;}
+ el.style.display='inline-block';el.textContent='👥 '+list.length+' online: '+list.map(_shortName).join(', ');}
+function startPresence(){if(!sbClient||!CURRENT_EMAIL)return;
+ try{if(PRESENCE_CH){sbClient.removeChannel(PRESENCE_CH);}}catch(e){}
+ try{
+  var ch=sbClient.channel('online_users',{config:{presence:{key:CURRENT_EMAIL}}});
+  ch.on('presence',{event:'sync'},function(){try{var st=ch.presenceState();renderOnline(Object.keys(st).sort());}catch(e){}});
+  ch.subscribe(function(status){if(status==='SUBSCRIBED'){try{ch.track({email:CURRENT_EMAIL,since:new Date().toISOString()});}catch(e){}}});
+  PRESENCE_CH=ch;
+ }catch(e){}}
+function stopPresence(){try{if(PRESENCE_CH){sbClient.removeChannel(PRESENCE_CH);PRESENCE_CH=null;}}catch(e){}renderOnline([]);}
 function accountBar(){return CURRENT_EMAIL?`<div style="text-align:right;margin-bottom:8px" class="no-print"><span class="muted small">👤 ${esc(CURRENT_EMAIL)}</span> <button class="btn ghost sm" onclick="changePwModal()">🔒 Change password</button> <button class="btn ghost sm" onclick="doLogout()">↩ Sign out</button></div>`:'';}
 function renderLogin(msg){var _tb=document.getElementById('topbar');if(_tb)_tb.style.display='none';app().innerHTML=`<div style="max-width:430px;margin:7vh auto">
   <div style="text-align:center;margin-bottom:14px"><div style="font-size:42px">🌱</div><h2 style="margin:6px 0">Kids Garden</h2><div class="sub">Pedagogical Dashboard</div></div>
@@ -542,8 +558,8 @@ async function doLogin(){if(!sbClient){toast('No connection to the cloud');retur
  if(res.error){const su=await sbClient.auth.signUp({email,password:pw});if(su.error){renderLogin('Incorrect password.');return;}}
  onLoggedIn(email,keep);}
 function onLoggedIn(email,keep){CURRENT_EMAIL=email;try{localStorage.setItem('kg.auth',JSON.stringify({email,until:Date.now()+864e5,keep:!!keep}));sessionStorage.setItem('kg.alive','1');}catch(e){}finishBoot();}
-async function finishBoot(){var _tb=document.getElementById('topbar');if(_tb)_tb.style.display='flex';toast('Loading...');await loadCloud();CLOUD_READY=true;subscribeCloud();go('home');}
-async function doLogout(){try{localStorage.removeItem('kg.auth');sessionStorage.removeItem('kg.alive');}catch(e){}CLOUD_READY=false;CURRENT_EMAIL=null;if(sbClient){try{await sbClient.auth.signOut();}catch(e){}}renderLogin('You have signed out. Sign in again to continue.');}
+async function finishBoot(){var _tb=document.getElementById('topbar');if(_tb)_tb.style.display='flex';toast('Loading...');await loadCloud();CLOUD_READY=true;subscribeCloud();try{startPresence();}catch(e){}go('home');}
+async function doLogout(){try{stopPresence();}catch(e){}try{localStorage.removeItem('kg.auth');sessionStorage.removeItem('kg.alive');}catch(e){}CLOUD_READY=false;CURRENT_EMAIL=null;if(sbClient){try{await sbClient.auth.signOut();}catch(e){}}renderLogin('You have signed out. Sign in again to continue.');}
 function changePwModal(){const ex=document.getElementById('cpwmodal');if(ex)ex.remove();const w=document.createElement('div');w.id='cpwmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
  w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:400px;text-align:left"><h2 style="color:var(--navy);font-size:19px">🔒 Change my password</h2>
   <label class="fl">New password</label><input class="inp" type="password" id="cpw_new" placeholder="minimum 6 characters">
