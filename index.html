@@ -226,17 +226,26 @@ const CAMB_INFO={
    "Listening":["Catch detail & specific information in longer audio","Spell words back; follow multi-step instructions"],
    "Reading & Writing":["Complete and continue texts; choose the right words","Use present perfect, adverbs and wider vocabulary"],
    "Speaking":["Spot differences and tell a story from pictures","Give simple reasons and opinions"]}},
- B1:{cefr:"B1 Preliminary",emoji:"🎓",exam:"2026-09-15",papers:["Reading & Use of English","Writing","Listening","Speaking"],focus:{
-   "Reading & Use of English":["Gist, detail, opinion & attitude across the parts","Grammar & vocabulary in context (Use of English)"],
+ B1:{cefr:"B1 Preliminary",emoji:"🎓",exam:"2026-09-15",papers:["Reading","Writing","Listening","Speaking"],focus:{
+   "Reading":["Gist, detail, opinion & attitude across the parts","Grammar & vocabulary in context (Use of English)"],
    "Writing":["Email ~100 words answering a prompt","Article or story ~100 words with clear structure"],
    "Listening":["Factual information, opinions & attitudes (4 parts)","Identify gist and specific details"],
    "Speaking":["Sustained interaction with a partner; compare photos","Express and justify opinions"]}}
 };
 /* Max raw marks per paper (YLE). Speaking is always an open, optional text note (no number). */
-const CAMB_MARKS={Starters:{"Listening":20,"Reading & Writing":25},Movers:{"Listening":25,"Reading & Writing":40},Flyers:{"Listening":25,"Reading & Writing":50}};
+const CAMB_MARKS={Starters:{"Listening":20,"Reading & Writing":25},Movers:{"Listening":25,"Reading & Writing":40},Flyers:{"Listening":25,"Reading & Writing":50},B1:{"Reading":32,"Listening":25}};
 function cambMax(lvl,paper){return ((CAMB_MARKS[lvl]||{})[paper])||null;}
 function cambIsSpeaking(p){return /speaking/i.test(p||'');}
-function cambPaperPct(lvl,paper,val){if(cambIsSpeaking(paper))return null;if(val===''||val==null)return null;var n=Number(val);if(isNaN(n))return null;var mx=cambMax(lvl,paper);return mx?Math.round(n/mx*100):Math.round(n);}
+/* B1 Writing has no number: the teacher writes a comment and the band is estimated from it,
+   following B1 Preliminary for Schools Writing criteria (Content, Communicative Achievement, Organisation, Language).
+   This is an AI-assisted heuristic estimate — it supports, never replaces, the teacher's judgement. */
+function cambIsWritingEstimate(lvl,p){return lvl==='B1'&&/^\s*writing\s*$/i.test(p||'');}
+function estimateWritingBand(text){var t=(text||'').toLowerCase();if(!t.trim())return null;
+ var pos=['excellent','great','very good','clear','well organi','well-structured','well structured','good range','wide range','accurate','appropriate','fluent','coherent','cohesive','relevant','completed the task','finished the task','good vocab','rich vocab','connectives','linkers','correct structure','organi','strong','confident','on topic','on-topic','good control','few errors','minor errors','natural','creative','impressive'];
+ var neg=['error','struggl','incomplete','did not finish','did not complete','could not finish','unclear','limited','very basic','basic','mistake','difficulty','could not','off-topic','off topic','irrelevant','too short','ran out of time','run out of time','disorgani','repetitive','confus','poor','weak','many errors','lacks','missing','needs to improve','needs work','below'];
+ var score=68;pos.forEach(function(w){if(t.indexOf(w)>=0)score+=4;});neg.forEach(function(w){if(t.indexOf(w)>=0)score-=6;});
+ return Math.max(20,Math.min(98,Math.round(score)));}
+function cambPaperPct(lvl,paper,val){if(cambIsSpeaking(paper))return null;if(cambIsWritingEstimate(lvl,paper))return (val&&String(val).trim())?estimateWritingBand(val):null;if(val===''||val==null)return null;var n=Number(val);if(isNaN(n))return null;var mx=cambMax(lvl,paper);return mx?Math.round(n/mx*100):Math.round(n);}
 const CAMB_ROSTER={};
 
 /* ===== Student full names + birthdays (cross-referenced from school lists) ===== */
@@ -1028,9 +1037,10 @@ function cambBandCard(name){
  const info=CAMB_INFO[lvl];const b=cambBand(name);const ms=cambMocks(name);const ex=cambExam(name);const dt=daysTo(ex);const closed=cambClosed(name);const papers=info.papers;
  const bars=b?papers.map(p=>{const raw=b.papers?b.papers[p]:null;
    if(cambIsSpeaking(p)){return `<div style="margin-bottom:6px"><div class="small"><b>${esc(p)}:</b> ${raw?esc(String(raw)):'<span class="muted">—</span>'}</div></div>`;}
+   if(cambIsWritingEstimate(lvl,p)){const wp=cambPaperPct(lvl,p,raw);return `<div style="margin-bottom:6px"><div class="small" style="display:flex;justify-content:space-between"><span>${esc(p)} <span class="muted">(AI est.)</span></span><span>${wp==null?'—':wp+'%'}</span></div><div style="background:var(--soft);border-radius:6px;height:10px"><div style="width:${wp==null?0:Math.min(100,wp)}%;height:10px;border-radius:6px;background:${wp==null?'#ccc':wp>=70?'var(--green)':wp>=50?'var(--orange)':'var(--bad)'}"></div></div>${raw?`<div class="small muted" style="margin-top:2px">${esc(String(raw))}</div>`:''}</div>`;}
    const pct=cambPaperPct(lvl,p,raw);const mx=cambMax(lvl,p);const disp=(raw==null||raw==='')?'—':(mx?(raw+'/'+mx):(raw+'%'));
    return `<div style="margin-bottom:6px"><div class="small" style="display:flex;justify-content:space-between"><span>${esc(p)}</span><span>${disp}${pct!=null?(' · '+pct+'%'):''}</span></div><div style="background:var(--soft);border-radius:6px;height:10px"><div style="width:${pct==null?0:Math.min(100,pct)}%;height:10px;border-radius:6px;background:${pct==null?'#ccc':pct>=70?'var(--green)':pct>=50?'var(--orange)':'var(--bad)'}"></div></div></div>`;}).join(''):'<p class="muted small">No mock recorded yet — add one in the Mock Tests tab.</p>';
- const hist=ms.length?`<div class="tbl-wrap" style="margin-top:8px"><table><tr><th>Mock date</th>${papers.map(p=>`<th>${esc(p)}${cambMax(lvl,p)?(' /'+cambMax(lvl,p)):''}</th>`).join('')}<th>Avg</th></tr>${ms.map(m=>{const pcts=[];papers.forEach(p=>{const pct=cambPaperPct(lvl,p,(m.papers||{})[p]);if(pct!=null)pcts.push(pct);});const a=pcts.length?Math.round(pcts.reduce((x,y)=>x+y,0)/pcts.length)+'%':'—';return `<tr><td>${esc(m.date||'')}</td>${papers.map(p=>{const val=(m.papers||{})[p];if(cambIsSpeaking(p))return `<td>${val?esc(String(val)):'—'}</td>`;return `<td>${(val==null||val==='')?'—':esc(String(val))}</td>`;}).join('')}<td><b>${a}</b></td></tr>`;}).join('')}</table></div>`:'';
+ const hist=ms.length?`<div class="tbl-wrap" style="margin-top:8px"><table><tr><th>Mock date</th>${papers.map(p=>`<th>${esc(p)}${cambMax(lvl,p)?(' /'+cambMax(lvl,p)):''}</th>`).join('')}<th>Avg</th></tr>${ms.map(m=>{const pcts=[];papers.forEach(p=>{const pct=cambPaperPct(lvl,p,(m.papers||{})[p]);if(pct!=null)pcts.push(pct);});const a=pcts.length?Math.round(pcts.reduce((x,y)=>x+y,0)/pcts.length)+'%':'—';return `<tr><td>${esc(m.date||'')}</td>${papers.map(p=>{const val=(m.papers||{})[p];if(cambIsSpeaking(p))return `<td>${val?esc(String(val)):'—'}</td>`;if(cambIsWritingEstimate(lvl,p)){const wp=cambPaperPct(lvl,p,val);return `<td>${wp==null?'—':wp+'% <span class="muted small">(est.)</span>'}</td>`;}return `<td>${(val==null||val==='')?'—':esc(String(val))}</td>`;}).join('')}<td><b>${a}</b></td></tr>`;}).join('')}</table></div>`:'';
  return `<div class="card" style="border-color:#D9C2E8">
    <h3>🎓 Cambridge progress — ${info.emoji} ${esc(lvl)} <span class="muted small">(${info.cefr})</span></h3>
    <div class="flag ${closed?'ok':(dt!=null&&dt<=14&&dt>=0)?'warn':'ok'}"><span class="fi">${closed?'✅':'📅'}</span><div>${closed?'<b>Exam completed</b> — activities closed for this candidate.':`Exam date: <b>${esc(ex||'—')}</b>${dt!=null?` · ${dt>=0?dt+' days to go':'past'}`:''}`}</div></div>
@@ -1134,6 +1144,7 @@ function cambAddMockForm(id,name,editIdx){
    <div class="row c2"><div><label class="fl">Mock date</label><input class="inp" type="date" id="mk_date" value="${editing?esc(cur.date||todayISO()):todayISO()}"></div><div></div></div>
    <div class="row c3">${papers.map((p,i)=>{const v=cur&&cur.papers?cur.papers[p]:undefined;
      if(cambIsSpeaking(p))return `<div><label class="fl">${esc(p)} <span class="muted">(open · optional)</span></label><textarea class="inp" id="mk_p${i}" placeholder="Examiner notes — how they did">${v!=null?esc(String(v)):''}</textarea></div>`;
+     if(cambIsWritingEstimate(lvl,p))return `<div><label class="fl">${esc(p)} <span class="muted">(comment — band estimated by AI)</span></label><textarea class="inp" id="mk_p${i}" placeholder="Describe the writing: task completion, structure/organisation, range &amp; accuracy of language — the band is estimated from this">${v!=null?esc(String(v)):''}</textarea></div>`;
      const mx=cambMax(lvl,p);return `<div><label class="fl">${esc(p)} ${mx?('(out of '+mx+')'):'(%)'}</label><input class="inp" type="number" min="0" ${mx?('max="'+mx+'"'):'max="100"'} id="mk_p${i}" value="${(v!=null&&v!=='')?esc(String(v)):''}"></div>`;}).join('')}</div>
    <div class="row"><div><label class="fl">Comment / focus</label><textarea class="inp" id="mk_obs" placeholder="What to target before the exam">${editing?esc(cur.comment||''):''}</textarea></div></div>
    <button class="btn" onclick="cambSaveMock('${id}','${esc(name).replace(/'/g,"\\'")}',${editing?editIdx:'null'})">💾 Save mock</button>
@@ -1142,7 +1153,7 @@ function cambAddMockForm(id,name,editIdx){
 }
 function cambSaveMock(id,name,editIdx){
  const lvl=cambLevelOf(name)||CAMB_LEVEL;const papers=CAMB_INFO[lvl].papers;const pj={};
- papers.forEach((p,i)=>{const el=$("#mk_p"+i);if(!el)return;const v=el.value;if(v==='')return;pj[p]=cambIsSpeaking(p)?String(v).trim():Number(v);});
+ papers.forEach((p,i)=>{const el=$("#mk_p"+i);if(!el)return;const v=el.value;if(v==='')return;pj[p]=(cambIsSpeaking(p)||cambIsWritingEstimate(lvl,p))?String(v).trim():Number(v);});
  const s=cambState();s.mocks[name]=s.mocks[name]||[];
  const rec={date:$("#mk_date").value||todayISO(),papers:pj,comment:$("#mk_obs").value};
  if(editIdx!=null&&editIdx>=0&&s.mocks[name][editIdx]){s.mocks[name][editIdx]=rec;}else{s.mocks[name].push(rec);}
