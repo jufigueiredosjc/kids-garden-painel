@@ -233,7 +233,7 @@ const CAMB_INFO={
    "Speaking":["Sustained interaction with a partner; compare photos","Express and justify opinions"]}}
 };
 /* Max raw marks per paper (YLE). Speaking is always an open, optional text note (no number). */
-const CAMB_MARKS={Starters:{"Listening":20,"Reading & Writing":25},Movers:{"Listening":25,"Reading & Writing":35},Flyers:{"Listening":25,"Reading & Writing":44}};
+const CAMB_MARKS={Starters:{"Listening":20,"Reading & Writing":25},Movers:{"Listening":25,"Reading & Writing":40},Flyers:{"Listening":25,"Reading & Writing":44}};
 function cambMax(lvl,paper){return ((CAMB_MARKS[lvl]||{})[paper])||null;}
 function cambIsSpeaking(p){return /speaking/i.test(p||'');}
 function cambPaperPct(lvl,paper,val){if(cambIsSpeaking(paper))return null;if(val===''||val==null)return null;var n=Number(val);if(isNaN(n))return null;var mx=cambMax(lvl,paper);return mx?Math.round(n/mx*100):Math.round(n);}
