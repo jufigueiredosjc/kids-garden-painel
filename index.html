@@ -304,6 +304,7 @@ function deleteStudentPermanently(cid,name){const dn=displayName(cid,name);
  if(STATE.students)delete STATE.students[cid+'::'+name];
  if(STATE.archived)delete STATE.archived[cid+'::'+name];
  if(STATE.dollarAdj)delete STATE.dollarAdj[cid+'::'+name];
+ if(STATE.dollarAdjNote)delete STATE.dollarAdjNote[cid+'::'+name];
  (sessionsOf(cid)||[]).forEach(s=>{if(s.rows)delete s.rows[name];});
  const c=getClass(cid);if(c&&c.students)c.students=c.students.filter(n=>n!==name);
  save();toast('🗑 '+dn+' permanently deleted — saved to the cloud');render();}
@@ -317,7 +318,7 @@ function moveStudentToClass(oldCid,name,newCid){if(!oldCid||!newCid||oldCid===ne
  oldS.forEach(function(s){if(!s.rows||s.rows[name]===undefined)return;var k=(s.date||'')+'|'+(s.slot||'');var ns=byKey[k];if(!ns){ns={date:s.date,slot:s.slot||'',theme:'',high:'',improve:'',rows:{}};newS.push(ns);byKey[k]=ns;}ns.rows=ns.rows||{};if(ns.rows[name]===undefined)ns.rows[name]=s.rows[name];delete s.rows[name];});
  newS.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
  STATE.addedStudents=STATE.addedStudents||{};STATE.addedStudents[newCid]=STATE.addedStudents[newCid]||[];if(STATE.addedStudents[newCid].indexOf(name)<0)STATE.addedStudents[newCid].push(name);if(STATE.addedStudents[oldCid])STATE.addedStudents[oldCid]=STATE.addedStudents[oldCid].filter(function(n){return n!==name;});
- ['students','archived','dollarAdj','coordNotes'].forEach(function(kk){var o=STATE[kk];if(!o)return;var ok=oldCid+'::'+name,nk=newCid+'::'+name;if(o[ok]!==undefined){o[nk]=o[ok];delete o[ok];}});
+ ['students','archived','dollarAdj','dollarAdjNote','coordNotes'].forEach(function(kk){var o=STATE[kk];if(!o)return;var ok=oldCid+'::'+name,nk=newCid+'::'+name;if(o[ok]!==undefined){o[nk]=o[ok];delete o[ok];}});
  var sk=STATE.skills;if(sk&&sk[oldCid]){sk[newCid]=sk[newCid]||{};Object.keys(sk[oldCid]).forEach(function(per){var pm=sk[oldCid][per];if(pm&&pm[name]!==undefined){sk[newCid][per]=sk[newCid][per]||{};sk[newCid][per][name]=pm[name];delete pm[name];}});}
  tombstone('stu|'+oldCid+'|'+name);}
 function saveStudentMeta(cid,name){const f=($("#sm_full").value||'').trim();const dob=($("#sm_dob").value||'').trim();const sel=$("#sm_class");const newCid=sel?sel.value:cid;
@@ -438,7 +439,7 @@ const SEED_SKILLS={};
 const CLASS_BASE=JSON.parse(JSON.stringify(CLASSES));
 let STATE=load();
 try{applyClassMeta();}catch(e){}
-function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],tombstones:{}};}
+function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],tombstones:{}};}
 function load(){
  let s=null;
  try{const r=localStorage.getItem(LS_KEY);if(r)s=JSON.parse(r);}catch(e){}
@@ -485,6 +486,7 @@ function applyTombstones(m){var T=m&&m.tombstones;if(!T)return m;var any=false,k
    if(m.students)delete m.students[sc+'::'+sn];
    if(m.archived)delete m.archived[sc+'::'+sn];
    if(m.dollarAdj)delete m.dollarAdj[sc+'::'+sn];
+   if(m.dollarAdjNote)delete m.dollarAdjNote[sc+'::'+sn];
    if(m.sessions&&m.sessions[sc])m.sessions[sc].forEach(function(s){if(s.rows)delete s.rows[sn];});}}
  if(m.customClasses)m.customClasses=m.customClasses.filter(function(x){return !(x&&x.id!=null&&T['cls|'+x.id]);});
  if(m.teacherTasks)m.teacherTasks=m.teacherTasks.filter(function(x){return !(x&&x.id!=null&&T['tsk|'+x.id]);});
@@ -493,7 +495,7 @@ function applyTombstones(m){var T=m&&m.tombstones;if(!T)return m;var any=false,k
 function mergeStatesForSave(base,loc){var m={},k;for(k in base)m[k]=base[k];for(k in loc)if(!(k in m))m[k]=loc[k];
  m.sessions=_mSessions(base.sessions||{},loc.sessions||{});m.addedStudents=_mAdded(base.addedStudents||{},loc.addedStudents||{});
  m.customClasses=_mById(base.customClasses||[],loc.customClasses||[]);m.teacherTasks=_mById(base.teacherTasks||[],loc.teacherTasks||[]);m.taskLog=_mById(base.taskLog||[],loc.taskLog||[]);m.patches=_mUniq(base.patches||[],loc.patches||[]);
- ['skills','tests','notes','messages','actions','dollarAdj','classMeta','students','archived','fluent','camb','coordNotes'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
+ ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
  m.tombstones=_mObj(base.tombstones||{},loc.tombstones||{});
  return applyTombstones(m);}
 async function cloudSave(){if(!sbClient)return;try{
@@ -660,24 +662,28 @@ function toggleAction(cid,aid){const a=actionsOf(cid).find(x=>x.id===aid);if(a){
 function delAction(cid,aid){STATE.actions[cid]=actionsOf(cid).filter(x=>x.id!==aid);save();render();}
 function actionRows(id,name){const acts=studentActions(id,name);if(!acts.length)return '';
  return `<div class="acts">${acts.map(x=>`<div class="actrow ${x.done?'done':''}"><span class="fi2">${x.done?'✅':'🛠️'}</span><div><b>${esc(x.solution)}</b><div class="small muted">Logged ${esc(x.date)}${x.due?` · deadline ${esc(x.due)}${(!x.done&&dueLate(x.due))?' <span class="badge b-absent">overdue</span>':''}`:''}${x.done?` · ✅ done ${esc(x.doneDate||'')}`:''}</div></div><div style="margin-left:auto;white-space:nowrap"><button class="btn ghost sm" onclick="toggleAction('${id}','${x.id}')">${x.done?'↩ Reopen':'✓ Resolve'}</button> <button class="btn ghost sm" onclick="delAction('${id}','${x.id}')">🗑</button></div></div>`).join('')}</div>`;}
-function editDollarModal(cid,name){const cur=studentStats(cid,name).dollars;const ex=document.getElementById('dolmodal');if(ex)ex.remove();
+function editDollarModal(cid,name){const cur=studentStats(cid,name).dollars;const prev=(STATE.dollarAdjNote&&STATE.dollarAdjNote[cid+'::'+name])||null;const ex=document.getElementById('dolmodal');if(ex)ex.remove();
  const w=document.createElement('div');w.id='dolmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
- w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:400px;text-align:left"><h2 style="color:var(--navy);font-size:19px">💵 Kid's Dollars — ${esc(displayName(cid,name))}</h2>
-   <p class="small muted">Current total: <b>$${cur}</b>. Enter the corrected total below (use this to fix or top up the amount).</p>
+ w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:420px;text-align:left"><h2 style="color:var(--navy);font-size:19px">💵 Adjust Kid's Dollars — ${esc(displayName(cid,name))}</h2>
+   <p class="small muted">Current total: <b>$${cur}</b>. Enter the corrected total and a short reason, so the change stays on record.</p>
    <label class="fl">Corrected total ($)</label><input class="inp" type="number" min="0" id="dol_new" value="${cur}">
+   <label class="fl" style="margin-top:8px">Reason for the adjustment *</label><textarea class="inp" id="dol_note" placeholder="e.g. Recently joined / doesn't do homework / corrected a wrong entry"></textarea>
+   ${prev?`<p class="small muted" style="margin-top:4px">Last change: ${esc(prev.note||'')} <span class="muted">(${esc((prev.ts||'').slice(0,10))}${prev.by?(' · '+esc(prev.by)):''})</span></p>`:''}
    <div style="margin-top:12px"><button class="btn" onclick="saveDollar('${cid}','${esc(name).replace(/'/g,"\\'")}')">💾 Save</button>
    <button class="btn ghost" onclick="document.getElementById('dolmodal').remove()">Cancel</button></div></div>`;
  document.body.appendChild(w);setTimeout(()=>{const e=$("#dol_new");if(e){e.focus();e.select();}},40);}
-function saveDollar(cid,name){const nv=Number($("#dol_new").value);if(isNaN(nv)||nv<0){toast("⚠️ Enter a valid amount");return;}
+function saveDollar(cid,name){const nv=Number($("#dol_new").value);if(isNaN(nv)||nv<0){toast("⚠️ Enter a valid amount");return;}const note=($("#dol_note")?$("#dol_note").value:'').trim();if(!note){toast("⚠️ Please add a short reason for the change");return;}
  let base=0;sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r)base+=Number(r.dollar)||0;});
- STATE.dollarAdj=STATE.dollarAdj||{};STATE.dollarAdj[cid+'::'+name]=nv-base;save();
- const m=document.getElementById('dolmodal');if(m)m.remove();toast("✅ Kid's Dollars updated");render();}
+ STATE.dollarAdj=STATE.dollarAdj||{};STATE.dollarAdj[cid+'::'+name]=nv-base;
+ STATE.dollarAdjNote=STATE.dollarAdjNote||{};STATE.dollarAdjNote[cid+'::'+name]={note:note,total:nv,ts:new Date().toISOString(),by:CURRENT_EMAIL||''};
+ save();const m=document.getElementById('dolmodal');if(m)m.remove();toast("✅ Kid's Dollars updated — reason saved");render();}
+function dismissKd(id){try{KD_DISMISSED.add(id);}catch(e){}render();}
 const countedStudents=()=>CLASSES.filter(c=>c.count).reduce((a,c)=>a+c.students.length,0);
 
 /* ============================================================ ROUTER ============================================================ */
 let VIEW={name:'home'};
-let ALERTED=null,MSG_DISMISSED=new Set();
-function go(name,arg){VIEW={name,arg};if(name!=='class'){ALERTED=null;EDIT_IDX=null;}if(name==='coord'){COORD_OK=false;RPT={};}MSG_DISMISSED=new Set();try{window.scrollTo(0,0);}catch(e){}render();}
+let ALERTED=null,MSG_DISMISSED=new Set(),KD_DISMISSED=new Set();
+function go(name,arg){VIEW={name,arg};if(name!=='class'){ALERTED=null;EDIT_IDX=null;}if(name==='coord'){COORD_OK=false;RPT={};}MSG_DISMISSED=new Set();KD_DISMISSED=new Set();try{window.scrollTo(0,0);}catch(e){}render();}
 /* ---- Coordination ↔ Teacher messaging ---- */
 function msgs(cid){STATE.messages=STATE.messages||{};return STATE.messages[cid]||(STATE.messages[cid]=[]);}
 function pendingFor(cid,role){return msgs(cid).filter(m=>m.from!==role&&m.status==='open');}
@@ -1152,7 +1158,7 @@ function tabOverview(id){
  if(_gen.length){flags+=`<div class="flag" style="background:#FFEB3B;border-color:#FBC02D;color:#000"><span class="fi">📝</span><div style="color:#000"><b>${_gen.length} report${_gen.length>1?'s':''} need student observations.</b> These have a date in the history but no observation for any child yet (often only a general note) on: <b>${_gen.map(p=>esc(p.date)).join(', ')}</b>. Open <b>📖 Edit Reports</b> and add a note for each child.</div></div>`;}
  if(_stu.length){const _tot=_stu.reduce((x,p)=>x+p.students.length,0);flags+=`<div class="flag" style="background:#FFEB3B;border-color:#FBC02D;color:#000"><span class="fi">📝</span><div style="color:#000"><b>${_tot} observation${_tot>1?'s':''} pending.</b> A student attended but has no note yet on: <b>${_stu.map(p=>esc(p.date)).join(', ')}</b>. Open <b>📖 Edit Reports</b> to complete.</div></div>`;}
  att.forEach(a=>{const reasons=a.reasons.join(' · ');const ns=esc(a.name).replace(/'/g,"\\'");flags+=`<div class="flag warn"><span class="fi">🔎</span><div><b>${esc(a.name)}</b> needs attention — ${esc(reasons)}${actionRows(id,a.name)}<div style="margin-top:6px"><button class="btn ghost sm" onclick="actionModal('${id}','${ns}','${encodeURIComponent(reasons)}')">📝 Log action</button></div></div></div>`;});
- if(kd){const goal=`<li>Semester goal: <b>$200</b> per child (Feb–Jun).</li><li>Expected by today: about <b>$${kd.expected}</b> (${kd.pct}% through the term).</li>`;if(kd.behind.length){flags+=`<div class="flag money"><span class="fi">💵</span><div><b>💵 Kid's Dollar tracker</b><ul style="margin:6px 0 0;padding-left:20px;line-height:1.6">${goal}<li><b>${kd.behind.length} child${kd.behind.length>1?'ren':''} below target:</b><ul style="margin:2px 0 0;padding-left:18px">${kd.behind.map(x=>`<li>${esc(displayName(id,x.name))} — <b>$${x.dollars}</b> (needs +$${x.gap})</li>`).join('')}</ul></li><li class="muted">Ms Lidiane &amp; ${esc(c.teacher)}: reward these students in the coming classes so they catch up.</li></ul>${actionRows(id,"Kid's Dollar")}<div style="margin-top:6px"><button class="btn ghost sm" onclick="actionModal('${id}','Kid\\'s Dollar','${encodeURIComponent('Kid\'s Dollar below target: '+kd.behind.map(x=>x.name+' $'+x.dollars).join(', '))}')">📝 Log action</button></div></div></div>`;}else if(kd.expected>0){flags+=`<div class="flag money"><span class="fi">💵</span><div><b>💵 Kid's Dollar tracker</b><ul style="margin:6px 0 0;padding-left:20px;line-height:1.6">${goal}<li><b>All students on track. ✅</b></li></ul></div></div>`;}}
+ if(kd&&!KD_DISMISSED.has(id)){const goal=`<li>Semester goal: <b>$200</b> per child (Feb–Jun).</li><li>Expected by today: about <b>$${kd.expected}</b> (${kd.pct}% through the term).</li>`;if(kd.behind.length){flags+=`<div class="flag money"><span class="fi">💵</span><div><b>💵 Kid's Dollar tracker</b><ul style="margin:6px 0 0;padding-left:20px;line-height:1.6">${goal}<li><b>${kd.behind.length} child${kd.behind.length>1?'ren':''} below target:</b><ul style="margin:2px 0 0;padding-left:18px">${kd.behind.map(x=>{const ns=esc(x.name).replace(/'/g,"\\'");return `<li>${esc(displayName(id,x.name))} — <b>$${x.dollars}</b> (needs +$${x.gap}) <button class="btn ghost sm" onclick="editDollarModal('${id}','${ns}')">💵 Adjust</button></li>`;}).join('')}</ul></li><li class="muted">Ms Lidiane &amp; ${esc(c.teacher)}: reward these students in the coming classes so they catch up.</li></ul><p class="hint" style="margin:6px 0 0"><b>Adjust</b> sets a child's total manually and asks for a reason (e.g. recently joined, or doesn't do homework), so the change is on record.</p><div style="margin-top:6px"><button class="btn ghost sm" onclick="dismissKd('${id}')">✕ Dismiss</button></div></div></div>`;}else if(kd.expected>0){flags+=`<div class="flag money"><span class="fi">💵</span><div><b>💵 Kid's Dollar tracker</b><ul style="margin:6px 0 0;padding-left:20px;line-height:1.6">${goal}<li><b>All students on track. ✅</b></li></ul></div></div>`;}}
  const recent=sessionsOf(id).slice(-5).reverse();
  const studentsTable=`<div class="card"><h3>👧 Students — ${activeStudents(c).length}</h3>
    <p class="hint">Tap <b>Report</b> for a child's development charts & summary, or <b>History</b> for everything written about them.</p>
@@ -2184,6 +2190,7 @@ function studentReport(cid,name){
      <div class="stat"><div class="n">${st.seen}</div><div class="l">Classes recorded</div></div>
      ${c.kidDollar?`<div class="stat purple"><div class="n">$${st.dollars}</div><div class="l">Kid's Dollars</div></div>`:''}
    </div></div>
+  ${(c.kidDollar&&STATE.dollarAdjNote&&STATE.dollarAdjNote[cid+'::'+name])?`<div class="flag" style="background:#F3E9FB;border-color:#CBA6E0"><span class="fi">💵</span><div><b>Kid's Dollars manually adjusted.</b> Reason: ${esc(STATE.dollarAdjNote[cid+'::'+name].note||'')} <span class="muted small">(${esc((STATE.dollarAdjNote[cid+'::'+name].ts||'').slice(0,10))}${STATE.dollarAdjNote[cid+'::'+name].by?(' · '+esc(STATE.dollarAdjNote[cid+'::'+name].by)):''})</span></div></div>`:''}
   ${c.special==='cambridge'?cambBandCard(name):''}
   <div class="card"><h3>🧑‍🔬 Pedagogical summary</h3><div class="narr"><ul style="margin:0 0 0 18px">${narrativeBullets(cid,name).map(x=>`<li style="margin-bottom:5px">${x}</li>`).join('')}</ul></div></div>
   <div class="card"><h3>🎯 Skills & competencies — focus & strengths</h3>
