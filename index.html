@@ -232,6 +232,11 @@ const CAMB_INFO={
    "Listening":["Factual information, opinions & attitudes (4 parts)","Identify gist and specific details"],
    "Speaking":["Sustained interaction with a partner; compare photos","Express and justify opinions"]}}
 };
+/* Max raw marks per paper (YLE). Speaking is always an open, optional text note (no number). */
+const CAMB_MARKS={Starters:{"Listening":20,"Reading & Writing":25},Movers:{"Listening":25,"Reading & Writing":35},Flyers:{"Listening":25,"Reading & Writing":44}};
+function cambMax(lvl,paper){return ((CAMB_MARKS[lvl]||{})[paper])||null;}
+function cambIsSpeaking(p){return /speaking/i.test(p||'');}
+function cambPaperPct(lvl,paper,val){if(cambIsSpeaking(paper))return null;if(val===''||val==null)return null;var n=Number(val);if(isNaN(n))return null;var mx=cambMax(lvl,paper);return mx?Math.round(n/mx*100):Math.round(n);}
 const CAMB_ROSTER={};
 
 /* ===== Student full names + birthdays (cross-referenced from school lists) ===== */
@@ -1006,8 +1011,10 @@ function cambLevelOf(name){const r=cambState().roster;for(const l of CAMB_LEVELS
 function cambExam(name){const ov=cambState().examOverride[name];if(ov)return ov;const l=cambLevelOf(name);return l?CAMB_INFO[l].exam:'';}
 function cambClosed(name){return !!cambState().closed[name];}
 function cambMocks(name){return (cambState().mocks[name]||[]).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));}
+function cambActive(lvl){return cambRoster(lvl).filter(n=>!isArchived('cambridge_prep',n));}
+function cambLastMockIdx(name){const arr=(cambState().mocks[name]||[]);if(!arr.length)return -1;let bi=0;for(let i=1;i<arr.length;i++){if((arr[i].date||'')>=(arr[bi].date||''))bi=i;}return bi;}
 function daysTo(d){if(!d)return null;return Math.ceil((new Date(d)-Date.now())/864e5);}
-function cambBand(name){const m=cambMocks(name);if(!m.length)return null;const last=m[m.length-1];const vals=Object.values(last.papers||{}).map(Number).filter(v=>!isNaN(v));if(!vals.length)return null;const avg=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+function cambBand(name){const m=cambMocks(name);if(!m.length)return null;const last=m[m.length-1];const lvl=cambLevelOf(name)||CAMB_LEVEL;const pcts=[];Object.keys(last.papers||{}).forEach(function(p){const pct=cambPaperPct(lvl,p,last.papers[p]);if(pct!=null)pcts.push(pct);});if(!pcts.length)return null;const avg=Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length);
  let label,cls;if(avg>=85){label='Exam-ready';cls='b-prof';}else if(avg>=70){label='On track';cls='b-present';}else if(avg>=50){label='Developing';cls='b-late';}else{label='Needs strong support';cls='b-absent';}
  return {avg,label,cls,papers:last.papers,date:last.date};}
 function addCambStudent(lvl,name,dob){name=(name||'').trim();if(!name)return false;const s=cambState();s.roster[lvl]=s.roster[lvl]||[];if(!s.roster[lvl].includes(name))s.roster[lvl].push(name);if(dob){STATE.students=STATE.students||{};STATE.students['cambridge_prep::'+name]={full:name,dob};}save();return true;}
@@ -1017,8 +1024,11 @@ function cambSetLevel(l,id){CAMB_LEVEL=l;renderClass(id);}
 function cambBandCard(name){
  const lvl=cambLevelOf(name);if(!lvl)return '';
  const info=CAMB_INFO[lvl];const b=cambBand(name);const ms=cambMocks(name);const ex=cambExam(name);const dt=daysTo(ex);const closed=cambClosed(name);const papers=info.papers;
- const bars=b?papers.map(p=>{const v=b.papers?b.papers[p]:null;return `<div style="margin-bottom:6px"><div class="small" style="display:flex;justify-content:space-between"><span>${esc(p)}</span><span>${v==null?'—':v+'%'}</span></div><div style="background:var(--soft);border-radius:6px;height:10px"><div style="width:${v==null?0:Math.min(100,v)}%;height:10px;border-radius:6px;background:${v==null?'#ccc':v>=70?'var(--green)':v>=50?'var(--orange)':'var(--bad)'}"></div></div></div>`;}).join(''):'<p class="muted small">No mock recorded yet — add one in the Mock Tests tab.</p>';
- const hist=ms.length?`<div class="tbl-wrap" style="margin-top:8px"><table><tr><th>Mock date</th>${papers.map(p=>`<th>${esc(p)}</th>`).join('')}<th>Avg</th></tr>${ms.map(m=>{const vals=Object.values(m.papers||{}).map(Number).filter(x=>!isNaN(x));const a=vals.length?Math.round(vals.reduce((x,y)=>x+y,0)/vals.length)+'%':'—';return `<tr><td>${esc(m.date||'')}</td>${papers.map(p=>`<td>${m.papers&&m.papers[p]!=null?m.papers[p]+'%':'—'}</td>`).join('')}<td><b>${a}</b></td></tr>`;}).join('')}</table></div>`:'';
+ const bars=b?papers.map(p=>{const raw=b.papers?b.papers[p]:null;
+   if(cambIsSpeaking(p)){return `<div style="margin-bottom:6px"><div class="small"><b>${esc(p)}:</b> ${raw?esc(String(raw)):'<span class="muted">—</span>'}</div></div>`;}
+   const pct=cambPaperPct(lvl,p,raw);const mx=cambMax(lvl,p);const disp=(raw==null||raw==='')?'—':(mx?(raw+'/'+mx):(raw+'%'));
+   return `<div style="margin-bottom:6px"><div class="small" style="display:flex;justify-content:space-between"><span>${esc(p)}</span><span>${disp}${pct!=null?(' · '+pct+'%'):''}</span></div><div style="background:var(--soft);border-radius:6px;height:10px"><div style="width:${pct==null?0:Math.min(100,pct)}%;height:10px;border-radius:6px;background:${pct==null?'#ccc':pct>=70?'var(--green)':pct>=50?'var(--orange)':'var(--bad)'}"></div></div></div>`;}).join(''):'<p class="muted small">No mock recorded yet — add one in the Mock Tests tab.</p>';
+ const hist=ms.length?`<div class="tbl-wrap" style="margin-top:8px"><table><tr><th>Mock date</th>${papers.map(p=>`<th>${esc(p)}${cambMax(lvl,p)?(' /'+cambMax(lvl,p)):''}</th>`).join('')}<th>Avg</th></tr>${ms.map(m=>{const pcts=[];papers.forEach(p=>{const pct=cambPaperPct(lvl,p,(m.papers||{})[p]);if(pct!=null)pcts.push(pct);});const a=pcts.length?Math.round(pcts.reduce((x,y)=>x+y,0)/pcts.length)+'%':'—';return `<tr><td>${esc(m.date||'')}</td>${papers.map(p=>{const val=(m.papers||{})[p];if(cambIsSpeaking(p))return `<td>${val?esc(String(val)):'—'}</td>`;return `<td>${(val==null||val==='')?'—':esc(String(val))}</td>`;}).join('')}<td><b>${a}</b></td></tr>`;}).join('')}</table></div>`:'';
  return `<div class="card" style="border-color:#D9C2E8">
    <h3>🎓 Cambridge progress — ${info.emoji} ${esc(lvl)} <span class="muted small">(${info.cefr})</span></h3>
    <div class="flag ${closed?'ok':(dt!=null&&dt<=14&&dt>=0)?'warn':'ok'}"><span class="fi">${closed?'✅':'📅'}</span><div>${closed?'<b>Exam completed</b> — activities closed for this candidate.':`Exam date: <b>${esc(ex||'—')}</b>${dt!=null?` · ${dt>=0?dt+' days to go':'past'}`:''}`}</div></div>
@@ -1068,7 +1078,7 @@ function cambOverview(id){
   <button class="btn ghost" onclick="setTab('students','${id}')">🎓 See students by level</button>`;
 }
 function cambReport(id){
- const c=getClass(id);const lvl=CAMB_LEVEL;const roster=cambRoster(lvl).filter(n=>!cambClosed(n));
+ const c=getClass(id);const lvl=CAMB_LEVEL;const roster=cambActive(lvl).filter(n=>!cambClosed(n));
  const lvlBtns=CAMB_LEVELS.map(l=>`<button class="unit-tab ${l===lvl?'active':''}" onclick="cambSetLevel('${l}','${id}')">${CAMB_INFO[l].emoji} ${l}</button>`).join('');
  const rows=roster.map((n,i)=>`<tr><td><b>${esc(displayName(id,n))}</b></td>
    <td><select class="att-sel" id="att_${i}">${ATT.map(a=>`<option ${a==='Present'?'selected':''}>${a}</option>`).join('')}</select></td>
@@ -1093,51 +1103,60 @@ function cambReport(id){
   <button class="btn ghost" onclick="setTab('overview','${id}')">Cancel</button>`;
 }
 function cambSaveReport(id){
- const lvl=CAMB_LEVEL;const roster=cambRoster(lvl).filter(n=>!cambClosed(n));
+ const lvl=CAMB_LEVEL;const roster=cambActive(lvl).filter(n=>!cambClosed(n));
  const entry={date:$("#r_date").value||todayISO(),level:lvl,theme:$("#r_theme").value,paper:$("#r_paper").value,high:$("#r_high").value,improve:$("#r_improve").value,rows:{}};
  roster.forEach((n,i)=>{entry.rows[n]={att:$("#att_"+i).value,hw:$("#hw_"+i).value,obs:$("#obs_"+i).value};});
  (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();toast("✅ Lesson saved");setTab('overview',id);
 }
 function cambMocksTab(id){
- const lvl=CAMB_LEVEL;const info=CAMB_INFO[lvl];const roster=cambRoster(lvl);
+ const lvl=CAMB_LEVEL;const info=CAMB_INFO[lvl];const roster=cambActive(lvl);
  const lvlBtns=CAMB_LEVELS.map(l=>`<button class="unit-tab ${l===lvl?'active':''}" onclick="cambSetLevel('${l}','${id}')">${CAMB_INFO[l].emoji} ${l}</button>`).join('');
- const body=roster.map(n=>{const b=cambBand(n);const ms=cambMocks(n);
+ const body=roster.map(n=>{const b=cambBand(n);const ms=cambMocks(n);const ns=esc(n).replace(/'/g,"\\'");const li=cambLastMockIdx(n);
    return `<tr><td><b>${esc(displayName(id,n))}</b>${cambClosed(n)?' <span class="badge b-na">closed</span>':''}</td>
      <td>${b?`<span class="badge ${b.cls}">${b.avg}% · ${b.label}</span> <span class="muted small">${esc(b.date||'')}</span>`:'<span class="muted small">no mock yet</span>'}</td>
      <td>${ms.length}</td>
-     <td><button class="btn ghost sm" onclick="cambAddMockForm('${id}','${esc(n).replace(/'/g,"\\'")}')">➕ Record mock</button></td></tr>`;}).join('');
+     <td>${ms.length?`<button class="btn ghost sm" onclick="cambAddMockForm('${id}','${ns}',${li})">✏️ Modify</button>`:'<span class="muted small">—</span>'}</td>
+     <td><button class="btn ghost sm" onclick="cambAddMockForm('${id}','${ns}')">➕ Record mock</button></td></tr>`;}).join('');
+ const mk=CAMB_MARKS[lvl];const mkTxt=mk?(Object.keys(mk).map(p=>p+' /'+mk[p]).join(' · ')+' · Speaking: open note'):'Enter scores as %';
  return `
   <div class="card"><h3>🧪 Mock tests — ${esc(lvl)}</h3>
-   <p class="hint">Enter each child's mock score per paper (the corrected mocks are in the Drive). Scores feed the progress band. Use % (e.g. correct ÷ total × 100, or convert YLE shields).</p>
+   <p class="hint">Enter each child's raw mock score per paper (corrected mocks are in the Drive). <b>${esc(mkTxt)}</b>. Speaking is an open note and optional. Scores feed the progress band.</p>
    <div class="unit-tabs">${lvlBtns}</div>
-   <div class="tbl-wrap"><table><tr><th>Student</th><th>Latest band</th><th>Mocks</th><th></th></tr>${body||'<tr><td colspan="4" class="muted small">No students.</td></tr>'}</table></div></div>
+   <div class="tbl-wrap"><table><tr><th>Student</th><th>Last band</th><th>Mocks</th><th>Modify</th><th></th></tr>${body||'<tr><td colspan="5" class="muted small">No students.</td></tr>'}</table></div></div>
   <div id="mockform"></div>`;
 }
-function cambAddMockForm(id,name){
+function cambAddMockForm(id,name,editIdx){
  const lvl=cambLevelOf(name)||CAMB_LEVEL;const papers=CAMB_INFO[lvl].papers;
- $("#mockform").innerHTML=`<div class="card"><h3>➕ New mock for ${esc(name)} <span class="muted small">(${esc(lvl)})</span></h3>
-   <div class="row c2"><div><label class="fl">Mock date</label><input class="inp" type="date" id="mk_date" value="${todayISO()}"></div><div></div></div>
-   <div class="row c3">${papers.map((p,i)=>`<div><label class="fl">${esc(p)} (%)</label><input class="inp" type="number" min="0" max="100" id="mk_p${i}"></div>`).join('')}</div>
-   <div class="row"><div><label class="fl">Comment / focus</label><textarea class="inp" id="mk_obs" placeholder="What to target before the exam"></textarea></div></div>
-   <button class="btn" onclick="cambSaveMock('${id}','${esc(name).replace(/'/g,"\\'")}')">💾 Save mock</button></div>`;
+ const arr=cambState().mocks[name]||[];const editing=(editIdx!=null&&editIdx>=0&&arr[editIdx]);const cur=editing?arr[editIdx]:null;
+ $("#mockform").innerHTML=`<div class="card"><h3>${editing?'✏️ Edit mock for':'➕ New mock for'} ${esc(displayName(id,name))} <span class="muted small">(${esc(lvl)})</span></h3>
+   <div class="row c2"><div><label class="fl">Mock date</label><input class="inp" type="date" id="mk_date" value="${editing?esc(cur.date||todayISO()):todayISO()}"></div><div></div></div>
+   <div class="row c3">${papers.map((p,i)=>{const v=cur&&cur.papers?cur.papers[p]:undefined;
+     if(cambIsSpeaking(p))return `<div><label class="fl">${esc(p)} <span class="muted">(open · optional)</span></label><textarea class="inp" id="mk_p${i}" placeholder="Examiner notes — how they did">${v!=null?esc(String(v)):''}</textarea></div>`;
+     const mx=cambMax(lvl,p);return `<div><label class="fl">${esc(p)} ${mx?('(out of '+mx+')'):'(%)'}</label><input class="inp" type="number" min="0" ${mx?('max="'+mx+'"'):'max="100"'} id="mk_p${i}" value="${(v!=null&&v!=='')?esc(String(v)):''}"></div>`;}).join('')}</div>
+   <div class="row"><div><label class="fl">Comment / focus</label><textarea class="inp" id="mk_obs" placeholder="What to target before the exam">${editing?esc(cur.comment||''):''}</textarea></div></div>
+   <button class="btn" onclick="cambSaveMock('${id}','${esc(name).replace(/'/g,"\\'")}',${editing?editIdx:'null'})">💾 Save mock</button>
+   <button class="btn ghost" onclick="document.getElementById('mockform').innerHTML=''">Cancel</button></div>`;
  try{$("#mockform").scrollIntoView({block:'center'});}catch(e){}
 }
-function cambSaveMock(id,name){
+function cambSaveMock(id,name,editIdx){
  const lvl=cambLevelOf(name)||CAMB_LEVEL;const papers=CAMB_INFO[lvl].papers;const pj={};
- papers.forEach((p,i)=>{const v=$("#mk_p"+i).value;if(v!=='')pj[p]=Number(v);});
- const s=cambState();s.mocks[name]=s.mocks[name]||[];s.mocks[name].push({date:$("#mk_date").value||todayISO(),papers:pj,comment:$("#mk_obs").value});
- save();toast("✅ Mock recorded");renderClass(id);
+ papers.forEach((p,i)=>{const el=$("#mk_p"+i);if(!el)return;const v=el.value;if(v==='')return;pj[p]=cambIsSpeaking(p)?String(v).trim():Number(v);});
+ const s=cambState();s.mocks[name]=s.mocks[name]||[];
+ const rec={date:$("#mk_date").value||todayISO(),papers:pj,comment:$("#mk_obs").value};
+ if(editIdx!=null&&editIdx>=0&&s.mocks[name][editIdx]){s.mocks[name][editIdx]=rec;}else{s.mocks[name].push(rec);}
+ save();toast((editIdx!=null&&editIdx>=0)?"✅ Mock updated":"✅ Mock recorded");renderClass(id);
 }
 function cambStudents(id){
- const blocks=CAMB_LEVELS.map(lvl=>{const info=CAMB_INFO[lvl];const roster=cambRoster(lvl);const dt=daysTo(info.exam);
+ const blocks=CAMB_LEVELS.map(lvl=>{const info=CAMB_INFO[lvl];const roster=cambActive(lvl);const archived=cambRoster(lvl).filter(n=>isArchived('cambridge_prep',n));const dt=daysTo(info.exam);
    const rowsHtml=roster.map(n=>{const b=cambBand(n);const ns=esc(n).replace(/'/g,"\\'");const closed=cambClosed(n);const ex=cambExam(n);
      return `<tr ${closed?'style="opacity:.55"':''}><td><b>${esc(displayName(id,n))}</b>${closed?' <span class="badge b-na">✓ Exam done</span>':''}</td>
        <td>${b?`<span class="badge ${b.cls}">${b.avg}% · ${b.label}</span>`:'<span class="muted small">no mock</span>'}</td>
        <td><input class="inp" type="date" style="padding:4px 6px;width:140px" value="${esc(ex)}" onchange="setCambExam('${ns}',this.value)"></td>
-       <td style="white-space:nowrap"><button class="btn ghost sm" onclick="openStudent('${id}','${ns}','report')">📄 Report</button> <button class="btn ghost sm" onclick="openStudent('${id}','${ns}','history')">📜 History</button> <button class="btn ghost sm" onclick="toggleCambClosed('${ns}')">${closed?'↩ Reopen':'✅ Close (exam done)'}</button></td></tr>`;}).join('');
+       <td style="white-space:nowrap"><button class="btn ghost sm" onclick="openStudent('${id}','${ns}','report')">📄 Report</button> <button class="btn ghost sm" onclick="openStudent('${id}','${ns}','history')">📜 History</button> <button class="btn ghost sm" onclick="toggleCambClosed('${ns}')">${closed?'↩ Reopen':'✅ Close (exam done)'}</button> <button class="btn ghost sm" onclick="archiveStudent('${id}','${ns}')">📦 Archive</button></td></tr>`;}).join('');
    const foc=Object.entries(info.focus).map(([p,arr])=>`<div class="comp"><h5>${esc(p)}</h5><ul>${arr.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
    return `<div class="card"><h3>${info.emoji} ${lvl} <span class="muted small">(${info.cefr}) · exam ${esc(info.exam)}${dt!=null&&dt>=0?` · ${dt} days`:''}</span></h3>
      <div class="tbl-wrap"><table><tr><th>Candidate</th><th>Progress band</th><th>Exam date</th><th></th></tr>${rowsHtml||'<tr><td colspan="4" class="muted small">No candidates.</td></tr>'}</table></div>
+     ${archived.length?`<div style="margin-top:8px"><div class="small muted" style="margin-bottom:6px">📦 Archived (${archived.length}) — kept out of the active list & mocks; history stays in the report.</div>${archived.map(n=>{const ans=esc(n).replace(/'/g,"\\'");return `<span class="pill" style="margin:0 6px 6px 0;display:inline-block;opacity:.8">${esc(displayName(id,n))} <button class="btn ghost sm" onclick="openStudent('${id}','${ans}','report')">📄 Report</button> <button class="btn ghost sm" onclick="unarchiveStudent('${id}','${ans}')">♻ Restore</button></span>`;}).join('')}</div>`:''}
      <div class="row c3" style="margin-top:10px;align-items:end"><div><label class="fl">➕ Add a candidate to ${lvl}</label><input class="inp" id="cadd_${lvl}" placeholder="Student's name"></div>
        <div><label class="fl">Date of birth</label><input class="inp" type="date" id="cdob_${lvl}"></div>
        <div><button class="btn ghost" onclick="if(addCambStudent('${lvl}',document.getElementById('cadd_${lvl}').value,document.getElementById('cdob_${lvl}').value)){renderClass('${id}');}">➕ Add</button></div></div>
