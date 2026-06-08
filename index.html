@@ -606,6 +606,9 @@ function trackItems(c){
 }
 function trackName(c){return c.track==="phonics"?"Phonics group":c.track==="nursery"?"Theme":c.track==="lessons"?"Lesson":"Unit";}
 function testName(c){return c.mock?"Mock Test":"Unit Test";}
+/* These classes score unit tests out of 10; target met = 80% (>=8). Only these levels. */
+function testMaxFor(c){return (c&&(c.level==='K1'||c.level==='K6'||c.level==='TeensB1'))?10:null;}
+function testTargetFor(c){var mx=testMaxFor(c);return mx?Math.round(mx*0.8):null;}
 
 /* helpers */
 const $=s=>document.querySelector(s);
@@ -653,7 +656,7 @@ function studentStats(id,name){
 }
 function weakSkills(id,name){const sk=STATE.skills[id]||{};const dev=new Set();Object.values(sk).forEach(per=>{const r=per[name];if(r)Object.entries(r).forEach(([s,v])=>{if(v==="Developing")dev.add(s);});});return[...dev];}
 function strongSkills(id,name){const sk=STATE.skills[id]||{};const pr=new Set();Object.values(sk).forEach(per=>{const r=per[name];if(r)Object.entries(r).forEach(([s,v])=>{if(v==="Proficient"||v==="Confident")pr.add(s);});});return[...pr];}
-function lowTest(id,name){const t=STATE.tests[id]||{};let msg=null;Object.entries(t).forEach(([u,rows])=>rows.forEach(r=>{if(r.student===name&&r.score!=null&&r.score<15)msg=`Test ${u} below average (${r.score})`;}));return msg;}
+function lowTest(id,name){const c=getClass(id);const mx=testMaxFor(c);const thr=mx?mx*0.8:15;const t=STATE.tests[id]||{};let msg=null;Object.entries(t).forEach(([u,rows])=>rows.forEach(r=>{if(r.student===name&&r.score!=null&&r.score<thr)msg=mx?`Test ${u} below target (${r.score}/${mx})`:`Test ${u} below average (${r.score})`;}));return msg;}
 function attentionList(id){
  const c=getClass(id);if(c.fluent)return[];const out=[];
  activeStudents(c).forEach(n=>{const st=studentStats(id,n);const reasons=[];
@@ -1510,19 +1513,20 @@ function saveAssessment(id,label){try{const a=document.activeElement;if(a&&a.blu
 
 /* TESTS / MOCK TESTS */
 function tabTests(id){
- const c=getClass(id);const t=STATE.tests[id]||{};const label=testName(c);
+ const c=getClass(id);const t=STATE.tests[id]||{};const label=testName(c);const mx=testMaxFor(c);const tg=testTargetFor(c);
  const units=Object.keys(t).map(Number).sort((a,b)=>a-b);
  let body=units.length?units.map(u=>{const rows=t[u];const scored=rows.filter(r=>r.score!=null);
    const avg=scored.length?(scored.reduce((a,r)=>a+r.score,0)/scored.length).toFixed(1):'—';
-   return `<div class="card"><h3>🧪 ${esc(label)} ${u} <span class="pill ok" style="margin-left:8px">avg ${avg}</span></h3>
+   return `<div class="card"><h3>🧪 ${esc(label)} ${u} <span class="pill ok" style="margin-left:8px">avg ${avg}${mx?(' / '+mx):''}</span></h3>
     <div class="tbl-wrap"><table><tr><th>Student</th><th>Level</th><th>Score</th><th>Feedback</th></tr>
-    ${rows.map(r=>`<tr><td><b>${esc(r.student)}</b></td><td>${esc(r.level||'Basic')}</td><td>${r.score==null?'<span class="badge b-absent">Absent</span>':`<span class="badge ${r.score>=22?'b-present':r.score>=15?'b-late':'b-absent'}">${r.score}</span>`}</td><td class="small">${esc(r.feedback||'')}</td></tr>`).join('')}
+    ${rows.map(r=>`<tr><td><b>${esc(r.student)}</b></td><td>${esc(r.level||'Basic')}</td><td>${r.score==null?'<span class="badge b-absent">Absent</span>':(mx?`<span class="badge ${r.score>=mx*0.8?'b-present':r.score>=mx*0.5?'b-late':'b-absent'}">${r.score}/${mx}${r.score>=mx*0.8?' 🎯':''}</span>`:`<span class="badge ${r.score>=22?'b-present':r.score>=15?'b-late':'b-absent'}">${r.score}</span>`)}</td><td class="small">${esc(r.feedback||'')}</td></tr>`).join('')}
     </table></div></div>`;}).join('') : `<div class="card"><p class="muted">No ${esc(label.toLowerCase())}s recorded yet.</p></div>`;
  return body+`<div class="card"><h3>➕ Add / update a ${esc(label.toLowerCase())} score</h3>
+   ${mx?`<p class="hint">This class scores out of <b>${mx}</b>. Target met = <b>${tg}+</b> (80%) 🎯.</p>`:''}
    <div class="row c3"><div><label class="fl">Student</label><select class="inp" id="t_stu">${c.students.map(s=>`<option>${esc(s)}</option>`).join('')}</select></div>
    <div><label class="fl">${esc(label)} number</label><input class="inp" type="number" min="1" id="t_unit" value="1"></div>
    <div><label class="fl">Level</label><select class="inp" id="t_lvl"><option>Basic</option><option>Extension</option></select></div></div>
-   <div class="row c2"><div><label class="fl">Score</label><input class="inp" type="number" id="t_score" placeholder="e.g. 24"></div>
+   <div class="row c2"><div><label class="fl">Score${mx?(' (out of '+mx+')'):''}</label><input class="inp" type="number" id="t_score" ${mx?('min="0" max="'+mx+'"'):''} placeholder="${mx?('0–'+mx+' · target '+tg):'e.g. 24'}"></div>
    <div><label class="fl">Feedback</label><input class="inp" id="t_fb" placeholder="Short diagnostic note"></div></div>
    <button class="btn" onclick="addTest('${id}')">💾 Save score</button></div>`;
 }
