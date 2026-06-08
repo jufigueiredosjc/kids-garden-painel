@@ -854,28 +854,32 @@ let EDIT_IDX=null;
 function tabEditHistory(id){
  const c=getClass(id);const ss=sessionsOf(id);
  if(EDIT_IDX!=null&&ss[EDIT_IDX])return editSessionForm(id,EDIT_IDX);
- const idx=ss.map((s,i)=>({s,i})).sort((a,b)=>(b.s.date||'').localeCompare(a.s.date||''));
- const fl=!!c.fluent;
+ const fl=!!c.fluent;const camb=c.special==='cambridge';const lvl=camb?CAMB_LEVEL:null;
+ let idx=ss.map((s,i)=>({s,i})).sort((a,b)=>(b.s.date||'').localeCompare(a.s.date||''));
+ if(camb)idx=idx.filter(o=>o.s.level===lvl||!o.s.level);
+ const lvlBtns=camb?CAMB_LEVELS.map(l=>`<button class="unit-tab ${l===lvl?'active':''}" onclick="cambSetLevel('${l}','${id}')">${CAMB_INFO[l].emoji} ${l}</button>`).join(''):'';
  return `
-  <div class="card"><h3>📖 Edit past reports</h3>
-   <p class="hint">Fix a wrong note, complete a forgotten observation, correct attendance, or add a class that wasn't logged — for any month. Changes update the children's history and the coordination view.</p>
+  <div class="card"><h3>📖 Edit past reports${camb?(' — '+esc(lvl)):''}</h3>
+   <p class="hint">Fix a wrong note, complete a forgotten observation, correct attendance, or add a class that wasn't logged — for any month. Changes update the children's history and the coordination view.${camb?' Reports are split by exam level — pick a level above.':''}</p>
+   ${camb?`<div class="unit-tabs" style="margin-bottom:10px">${lvlBtns}</div>`:''}
    <div class="row ${fl?'c3':'c2'}" style="align-items:end">
-     <div><label class="fl">➕ Add a class that was missed</label><input class="inp" type="date" id="add_date"></div>
+     <div><label class="fl">➕ Add a class that was missed${camb?(' to '+esc(lvl)):''}</label><input class="inp" type="date" id="add_date"></div>
      ${fl?`<div><label class="fl">Time slot</label><select class="inp" id="add_slot">${c.slots.map(s=>`<option value="${esc(s)}">${esc(displayName(c.id,s))}</option>`).join('')}</select></div>`:''}
      <div><button class="btn ghost" onclick="addMissedSession('${id}')">➕ Add & edit</button></div>
    </div></div>
-  <div class="card"><h3>🗂 All reports (${ss.length})</h3>
-   ${ss.length?`<div class="tbl-wrap"><table><tr><th>Date</th>${fl?'<th>Slot</th>':''}<th>Theme</th><th>Present</th><th>Obs filled</th><th></th></tr>
+  <div class="card"><h3>🗂 ${camb?(esc(lvl)+' reports'):'All reports'} (${idx.length})</h3>
+   ${idx.length?`<div class="tbl-wrap"><table><tr><th>Date</th>${fl?'<th>Slot</th>':''}<th>Theme</th><th>Present</th><th>Obs filled</th><th></th></tr>
    ${idx.map(({s,i})=>{const rows=Object.values(s.rows||{});const present=rows.filter(x=>x.att==='Present'||x.att==='Late').length;const withObs=rows.filter(x=>x.obs&&x.obs.trim()).length;const gap=present>withObs;
-     return `<tr><td><b>${esc(s.date||'—')}</b></td>${fl?`<td>${esc(s.slot||'—')}</td>`:''}<td>${esc(s.theme||'—')}</td><td>${present}</td><td>${gap?`<span class="badge b-late">${withObs}/${present||rows.length}</span>`:`${withObs}/${rows.length}`}</td>
+     return `<tr><td><b>${esc(s.date||'—')}</b></td>${fl?`<td>${esc(s.slot||'—')}</td>`:''}<td>${esc(s.theme||'—')}${camb&&!s.level?' <span class="badge b-na">no level</span>':''}</td><td>${present}</td><td>${gap?`<span class="badge b-late">${withObs}/${present||rows.length}</span>`:`${withObs}/${rows.length}`}</td>
        <td style="white-space:nowrap"><button class="btn ghost sm" onclick="editSession('${id}',${i})">✏️ Edit</button> <button class="btn ghost sm" onclick="deleteSession('${id}',${i})">🗑 Delete</button></td></tr>`;}).join('')}
-   </table></div>`:'<p class="muted small">No reports yet.</p>'}</div>`;
+   </table></div>`:`<p class="muted small">No reports${camb?' in this level':''} yet.</p>`}</div>`;
 }
 function editSession(id,i){EDIT_IDX=i;renderClass(id);}
 function deleteSession(id,i){const s=sessionsOf(id)[i];if(!confirm('⚠️ Permanently delete the report for '+(s&&s.date||'this class')+'?\n\nIt will be erased for everyone, in the cloud, and cannot be undone.'))return;if(s)tombstone('sess|'+id+'|'+(s.date||'')+'|'+(s.slot||''));STATE.sessions[id].splice(i,1);save();toast('🗑 Report permanently deleted');EDIT_IDX=null;renderClass(id);}
 function addMissedSession(id){const el=$("#add_date");const d=el&&el.value;if(!d){toast('Pick a date first');return;}const c=getClass(id);
  let entry;
  if(c.fluent){const slot=($("#add_slot")&&$("#add_slot").value)||c.slots[0];entry={date:d,slot,theme:FLUENT_THEMES[d]||'',high:'',improve:'',rows:{}};fluentActive(slot).forEach(n=>{entry.rows[n]={att:'Present',obs:''};});}
+ else if(c.special==='cambridge'){entry={date:d,level:CAMB_LEVEL,theme:'',high:'',improve:'',rows:{}};cambActive(CAMB_LEVEL).forEach(n=>{entry.rows[n]={att:'Present',obs:''};});}
  else{entry={date:d,theme:'',high:'',improve:'',periodIdx:null,period:'',rows:{}};c.students.forEach(n=>{entry.rows[n]={att:'Present',hw:'No homework',dollar:0,obs:''};});}
  (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();EDIT_IDX=STATE.sessions[id].length-1;renderClass(id);}
 function editSessionForm(id,i){
