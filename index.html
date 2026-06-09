@@ -693,8 +693,16 @@ function saveAction(cid){const sol=($("#ac_sol").value||'').trim();if(!sol){toas
  const m=document.getElementById('acmodal');if(m)m.remove();toast("✅ Action logged in the daily report");render();}
 function toggleAction(cid,aid){const a=actionsOf(cid).find(x=>x.id===aid);if(a){a.done=!a.done;a.doneDate=a.done?todayISO():'';save();render();}}
 function delAction(cid,aid){STATE.actions[cid]=actionsOf(cid).filter(x=>x.id!==aid);save();render();}
+/* ===== Action follow-ups: two-way thread between teacher and coordination ===== */
+function actionThread(a){return Array.isArray(a.thread)?a.thread:[];}
+function awaitsCoord(a){if(a.done)return false;const th=actionThread(a);return th.length?th[th.length-1].by!=='coord':true;}
+function addActionComment(cid,aid,by,text){text=(text||'').trim();if(!text){toast('Write a comment first');return;}const a=actionsOf(cid).find(x=>x.id===aid);if(!a)return;a.thread=actionThread(a);a.thread.push({by,text,ts:new Date().toISOString()});save();toast(by==='coord'?'✅ Sent to the teacher':'✅ Sent to coordination');render();}
+function resolveAction(cid,aid){const a=actionsOf(cid).find(x=>x.id===aid);if(!a)return;a.done=true;a.doneDate=todayISO();save();toast('✅ Marked resolved — visible to the teacher');render();}
+function coordPendingActions(){const out=[];CLASSES.forEach(c=>{actionsOf(c.id).forEach(a=>{if(awaitsCoord(a))out.push({cid:c.id,a});});});return out;}
+function actionThreadHtml(cid,a){const th=actionThread(a);if(!th.length)return '';const tn=(getClass(cid)||{}).teacher||'Teacher';
+ return `<div style="margin-top:6px;border-left:3px solid #9FB8DC;padding-left:8px">${th.map(m=>{const coord=m.by==='coord';return `<div class="small" style="margin-bottom:4px;${coord?'color:#1B4F86':''}"><b>${coord?'🧭 Coordination':'👤 '+esc(tn)}:</b> ${esc(m.text)} <span class="muted">${esc((m.ts||'').slice(0,10))}</span></div>`;}).join('')}</div>`;}
 function actionRows(id,name){const acts=studentActions(id,name);if(!acts.length)return '';
- return `<div class="acts">${acts.map(x=>`<div class="actrow ${x.done?'done':''}"><span class="fi2">${x.done?'✅':'🛠️'}</span><div><b>${esc(x.solution)}</b><div class="small muted">Logged ${esc(x.date)}${x.due?` · deadline ${esc(x.due)}${(!x.done&&dueLate(x.due))?' <span class="badge b-absent">overdue</span>':''}`:''}${x.done?` · ✅ done ${esc(x.doneDate||'')}`:''}</div></div><div style="margin-left:auto;white-space:nowrap"><button class="btn ghost sm" onclick="toggleAction('${id}','${x.id}')">${x.done?'↩ Reopen':'✓ Resolve'}</button> <button class="btn ghost sm" onclick="delAction('${id}','${x.id}')">🗑</button></div></div>`).join('')}</div>`;}
+ return `<div class="acts">${acts.map(x=>`<div class="actrow ${x.done?'done':''}"><span class="fi2">${x.done?'✅':'🛠️'}</span><div style="flex:1"><b>${esc(x.solution)}</b><div class="small muted">Logged ${esc(x.date)}${x.due?` · deadline ${esc(x.due)}${(!x.done&&dueLate(x.due))?' <span class="badge b-absent">overdue</span>':''}`:''}${x.done?` · ✅ done ${esc(x.doneDate||'')}`:''}${(!x.done&&!awaitsCoord(x))?' <span class="badge b-na">🧭 coordination replied</span>':''}</div>${actionThreadHtml(id,x)}${!x.done?`<div style="margin-top:6px" class="no-print"><input class="inp" id="cmt_${x.id}" placeholder="Reply to coordination…" style="font-size:12px;padding:5px 8px;max-width:340px"> <button class="btn ghost sm" onclick="addActionComment('${id}','${x.id}','teacher',(document.getElementById('cmt_${x.id}')||{}).value)">💬 Send</button></div>`:''}</div><div style="margin-left:auto;white-space:nowrap"><button class="btn ghost sm" onclick="toggleAction('${id}','${x.id}')">${x.done?'↩ Reopen':'✓ Resolve'}</button> <button class="btn ghost sm" onclick="delAction('${id}','${x.id}')">🗑</button></div></div>`).join('')}</div>`;}
 function editDollarModal(cid,name){const cur=studentStats(cid,name).dollars;const prev=(STATE.dollarAdjNote&&STATE.dollarAdjNote[cid+'::'+name])||null;const ex=document.getElementById('dolmodal');if(ex)ex.remove();
  const w=document.createElement('div');w.id='dolmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
  w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:420px;text-align:left"><h2 style="color:var(--navy);font-size:19px">💵 Adjust Kid's Dollars — ${esc(displayName(cid,name))}</h2>
@@ -716,7 +724,7 @@ const countedStudents=()=>CLASSES.filter(c=>c.count).reduce((a,c)=>a+c.students.
 /* ============================================================ ROUTER ============================================================ */
 let VIEW={name:'home'};
 let ALERTED=null,MSG_DISMISSED=new Set(),KD_DISMISSED=new Set();
-function go(name,arg){VIEW={name,arg};if(name!=='class'){ALERTED=null;EDIT_IDX=null;}if(name==='coord'){COORD_OK=false;RPT={};}MSG_DISMISSED=new Set();KD_DISMISSED=new Set();try{window.scrollTo(0,0);}catch(e){}render();}
+function go(name,arg){VIEW={name,arg};if(name!=='class'){ALERTED=null;EDIT_IDX=null;}if(name==='coord'){COORD_OK=false;RPT={};COORD_ACT_POPPED=false;}MSG_DISMISSED=new Set();KD_DISMISSED=new Set();try{window.scrollTo(0,0);}catch(e){}render();}
 /* ---- Coordination ↔ Teacher messaging ---- */
 function msgs(cid){STATE.messages=STATE.messages||{};return STATE.messages[cid]||(STATE.messages[cid]=[]);}
 function pendingFor(cid,role){return msgs(cid).filter(m=>m.from!==role&&m.status==='open');}
@@ -1640,7 +1648,7 @@ function renderLearning(){
 }
 
 /* ============================================================ COORDINATION ============================================================ */
-let COORD_OK=false,COORD_TAB='overview';
+let COORD_OK=false,COORD_TAB='overview',COORD_ACT_POPPED=false;
 function coordStructure(){
  const rows=CLASSES.map(c=>{const L=LEVELS[c.level]||{};const custom=(STATE.customClasses||[]).some(x=>x.id===c.id);
   return `<tr><td><b>${esc(c.name)}</b> <span class="muted small">${esc(c.time||'')}</span>${custom?' <span class="badge b-na">added</span>':''}</td>
@@ -1880,7 +1888,7 @@ function renderCoordGate(){
 function tryPwd(){const el=$("#pwd");const val=el?String(el.value).trim():'';if(val===COORD_PWD){COORD_OK=true;COORD_TAB='overview';toast("✅ Welcome, Coordination");renderCoord();}else toast("❌ Wrong password");}
 function renderCoord(){
  const totalPend=CLASSES.reduce((a,c)=>a+pendingFor(c.id,'coord').length,0);
- const bt=birthdaysToday().length;const tabs=[['overview','📊 Class Performance'],['teachers','⏰ Teacher Compliance'],['attention','🔎 Children to Watch'],['reports','📄 Progress Reports'],['messages','✉️ Messages'+(totalPend?` (${totalPend})`:'')],['birthdays','🎂 Birthdays'+(bt?` (${bt})`:'')],['structure','🏗 Structural Organization']];
+ const bt=birthdaysToday().length;const fc=coordPendingActions().length;const tabs=[['overview','📊 Class Performance'],['teachers','⏰ Teacher Compliance'],['attention','🔎 Children to Watch'],['follow','🚦 Follow-ups'+(fc?` (${fc})`:'')],['reports','📄 Progress Reports'],['messages','✉️ Messages'+(totalPend?` (${totalPend})`:'')],['birthdays','🎂 Birthdays'+(bt?` (${bt})`:'')],['structure','🏗 Structural Organization']];
  app().innerHTML=`<div class="page-head"><button class="back" onclick="go('home')">← Home</button>
    <div><h2>🧭 Coordination Dashboard</h2><div class="sub">Full pedagogical oversight · ${CLASSES.filter(c=>c.count).length} classes · ${countedStudents()} students</div></div></div>
   <div class="tabs">${tabs.map(t=>`<button class="tab ${COORD_TAB===t[0]?'active':''}" onclick="setCoordTab('${t[0]}')">${t[1]}</button>`).join('')}</div>
@@ -1891,10 +1899,12 @@ function renderCoord(){
  if(COORD_TAB==='overview')coordOverview(b);
  else if(COORD_TAB==='teachers')b.innerHTML=coordTeachers();
  else if(COORD_TAB==='attention')b.innerHTML=coordAttention();
+ else if(COORD_TAB==='follow')b.innerHTML=coordActionsPanel();
  else if(COORD_TAB==='reports'){b.innerHTML=coordReports();if(!RPT.cid)fillRptStudents();}
  else if(COORD_TAB==='messages')b.innerHTML=coordMessages();
  else if(COORD_TAB==='birthdays')b.innerHTML=coordBirthdays();
  else if(COORD_TAB==='structure')b.innerHTML=coordStructure();
+ if(!COORD_ACT_POPPED){COORD_ACT_POPPED=true;setTimeout(function(){try{showCoordActionsPopup();}catch(e){}},80);}
 }
 function coordBirthdays(){
  const list=allBirthdays().sort((a,b)=>(a.days==null?999:a.days)-(b.days==null?999:b.days));
@@ -1933,6 +1943,31 @@ function coordMessages(){
      <button class="btn ghost sm no-print" style="margin-top:8px" onclick="composeMsg('${c.id}','coord')">✉️ Message this teacher</button></div>`;}).join(''):'<div class="card"><p class="muted small">No messages yet.</p></div>'}`;
 }
 function setCoordTab(t){COORD_TAB=t;renderCoord();}
+function coordActionsPanel(){
+ const all=[];CLASSES.forEach(c=>{actionsOf(c.id).forEach(a=>{all.push({cid:c.id,c,a});});});
+ if(!all.length)return `<div class="card"><h3>🚦 Action follow-ups</h3><p class="muted small">No student actions logged by teachers yet. When a teacher logs an action in “What needs your attention”, it appears here.</p></div>`;
+ const open=all.filter(x=>!x.a.done).sort((p,q)=>(awaitsCoord(q.a)?1:0)-(awaitsCoord(p.a)?1:0));
+ const closed=all.filter(x=>x.a.done).sort((p,q)=>(q.a.doneDate||'').localeCompare(p.a.doneDate||''));
+ const card=x=>{const a=x.a;const aw=awaitsCoord(a);return `<div class="card" style="${(!a.done&&aw)?'border-color:#FBC02D;background:linear-gradient(120deg,#FFFDF6,#FFF7E0)':''}">
+   <h3 style="font-size:17px">${esc(displayName(x.cid,a.student))} <span class="muted small">${esc(x.c.name)} · ${esc(x.c.teacher)}</span> ${a.done?'<span class="badge b-present">resolved</span>':(aw?'<span class="badge b-late">awaiting coordination</span>':'<span class="badge b-na">awaiting teacher</span>')}</h3>
+   ${a.point?`<p class="small"><b>Attention point:</b> ${esc(a.point)}</p>`:''}<p class="small"><b>Teacher's plan:</b> ${esc(a.solution||'')} <span class="muted">${esc(a.date||'')}</span></p>
+   ${actionThreadHtml(x.cid,a)}
+   ${!a.done?`<div style="margin-top:8px"><textarea class="inp" id="ccmt_${a.id}" placeholder="Coordination comment / guidance / solution — the teacher will see it, signed as Coordination"></textarea>
+    <div style="margin-top:6px"><button class="btn" onclick="addActionComment('${x.cid}','${a.id}','coord',(document.getElementById('ccmt_${a.id}')||{}).value)">🧭 Send comment</button>
+    <button class="btn ghost" onclick="resolveAction('${x.cid}','${a.id}')">✅ Mark resolved</button></div></div>`:`<div style="margin-top:6px"><button class="btn ghost sm" onclick="toggleAction('${x.cid}','${a.id}')">↩ Reopen</button></div>`}
+  </div>`;};
+ return `<div class="card"><h3>🚦 Action follow-ups</h3><p class="hint">When a teacher logs an action for a child (in “What needs your attention”), it appears here. Add your guidance (signed Coordination), exchange comments with the teacher, and mark it resolved. The whole thread is kept in the child's report.</p></div>
+  ${open.length?`<div class="section-title">⏳ Open (${open.length})</div>`+open.map(card).join(''):'<div class="card"><p class="muted small">No open follow-ups. ✅</p></div>'}
+  ${closed.length?`<div class="section-title">✅ Resolved (${closed.length})</div>`+closed.map(card).join(''):''}`;
+}
+function showCoordActionsPopup(){const pend=coordPendingActions();if(!pend.length)return;const ex=document.getElementById('capop');if(ex)ex.remove();
+ const w=document.createElement('div');w.id='capop';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box"><div class="od-ico">🚦</div><h2>Student follow-ups need your review</h2>
+  <p><b>${pend.length}</b> action${pend.length>1?'s':''} logged by teachers ${pend.length>1?'are':'is'} waiting for coordination.</p>
+  <p class="od-sub">Open them to add your guidance, exchange comments with the teacher and resolve.</p>
+  <div style="margin-top:6px"><button class="btn" onclick="var m=document.getElementById('capop');if(m)m.remove();setCoordTab('follow');">🚦 Open</button>
+  <button class="btn ghost" onclick="var m=document.getElementById('capop');if(m)m.remove();">Dismiss</button></div></div>`;
+ document.body.appendChild(w);}
 
 function coordReportsPending(){let rows='';CLASSES.forEach(c=>{if(c.fluent)return;const p=pendingObs(c.id);if(!p.length)return;const gen=p.filter(x=>x.generalOnly);const stu=p.filter(x=>!x.generalOnly);const stuTot=stu.reduce((a,x)=>a+x.students.length,0);
   rows+=`<tr><td><b>${esc(c.name)}</b> <span class="muted small">${esc(c.time)}</span></td><td>${esc(c.teacher)}</td><td>${gen.length?`<span class="badge b-late">${gen.length} without student notes</span> `:''}${stuTot?`<span class="badge b-late">${stuTot} student note${stuTot>1?'s':''} missing</span>`:''}</td><td class="small muted">${esc(p.map(x=>x.date).join(', '))}</td><td><button class="btn ghost sm" onclick="go('class','${c.id}')">Open</button></td></tr>`;});
@@ -2285,6 +2320,7 @@ function studentReport(cid,name){
    ${recent.length?`<ul style="margin:0 0 0 18px">${recent.map(o=>`<li class="small" style="margin-bottom:6px"><b>${esc(o.date||'')}:</b> ${esc(o.obs)}</li>`).join('')}</ul>`:'<p class="muted small">No written observations yet.</p>'}
    <button class="btn ghost sm" style="margin-top:10px" onclick="openStudent('${cid}','${esc(name).replace(/'/g,"\\'")}','history')">📜 See full history →</button>
   </div>
+  ${(()=>{const acts=studentActions(cid,name);if(!acts.length)return '';return `<div class="card"><h3>🚦 Action follow-ups</h3><p class="hint">Attention points logged by the teacher and the coordination's guidance — kept in this child's record.</p>${acts.map(a=>`<div class="actrow ${a.done?'done':''}" style="display:block"><div><b>${esc(a.solution||a.point||'')}</b> <span class="muted small">${esc(a.date||'')}</span> ${a.done?'<span class="badge b-present">resolved</span>':'<span class="badge b-late">open</span>'}</div>${a.point?`<div class="small muted">Point: ${esc(a.point)}</div>`:''}${actionThreadHtml(cid,a)}</div>`).join('')}</div>`;})()}
   ${pedagogicalOrientationCard(cid,name)}`;
  // charts
  setTimeout(()=>{if(!window.Chart)return;
