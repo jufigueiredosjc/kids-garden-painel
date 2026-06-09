@@ -924,19 +924,19 @@ function editSessionForm(id,i){
   <button class="btn" onclick="saveEdit('${id}',${i})">💾 Save changes</button>
   <button class="btn ghost" onclick="EDIT_IDX=null;renderClass('${id}')">Cancel</button>`;
 }
-function saveEdit(id,i){
- const c=getClass(id);const s=sessionsOf(id)[i];if(!s)return;const fl=!!c.fluent;
+function saveEdit(id,i){try{
+ const c=getClass(id);const s=sessionsOf(id)[i];if(!s)return;const fl=!!c.fluent;const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
  let names;
  if(fl){names=fluentRoster(s.slot||c.slots[0]).slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else if(c.special==='cambridge'){names=cambRoster(s.level||'').slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else{names=[...c.students];Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
- if(obsRequired(c)){const missing=[];names.forEach((n,k)=>{const att=$("#eatt_"+k).value;const obs=($("#eobs_"+k).value||'').trim();const el=$("#eobs_"+k);if(el)el.style.borderColor='';if((att==='Present'||att==='Late')&&!obs){missing.push(n);if(el)el.style.borderColor='var(--bad)';}});if(missing.length){toast('✍️ Observation required for: '+missing.join(', '));return;}}
- s.date=$("#e_date").value||s.date;s.theme=$("#e_theme").value;s.high=$("#e_high").value;s.improve=$("#e_improve").value;
- if(fl&&$("#e_slot"))s.slot=$("#e_slot").value;
+ if(obsRequired(c)){const missing=[];names.forEach((n,k)=>{const att=$v('eatt_'+k);const obs=$v('eobs_'+k).trim();const el=$("#eobs_"+k);if(el)el.style.borderColor='';if((att==='Present'||att==='Late')&&!obs){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});if(missing.length){toast('✍️ Observation required for: '+missing.join(', '));return;}}
+ s.date=$v('e_date')||s.date;s.theme=$v('e_theme');s.high=$v('e_high');s.improve=$v('e_improve');
+ if(fl&&$("#e_slot"))s.slot=$v('e_slot');
  const ph=c.track==='phonics';
- const rows={};names.forEach((n,k)=>{if(fl){rows[n]={att:$("#eatt_"+k).value,obs:$("#eobs_"+k).value};}else{const row={att:$("#eatt_"+k).value,hw:$("#ehw_"+k).value,dollar:c.kidDollar?Number($("#edol_"+k).value)||0:0,obs:$("#eobs_"+k).value};if(ph&&$("#ephon_"+k)){row.phon=$("#ephon_"+k).value;row.phsk=readPhonSkills('ephon',k);}rows[n]=row;}});
+ const rows={};names.forEach((n,k)=>{if(fl){rows[n]={att:$v('eatt_'+k)||'Present',obs:$v('eobs_'+k)};}else{const row={att:$v('eatt_'+k)||'Present',hw:$v('ehw_'+k),dollar:c.kidDollar?(Number($v('edol_'+k))||0):0,obs:$v('eobs_'+k)};if(ph&&$("#ephon_"+k)){row.phon=$v('ephon_'+k);row.phsk=readPhonSkills('ephon',k);}rows[n]=row;}});
  s.rows=rows;save();toast('✅ Report updated');EDIT_IDX=null;renderClass(id);
-}
+}catch(err){toast('⚠️ Could not save the changes: '+(err&&err.message||err));}}
 
 /* ============================================================ FLUENT STEPS (Monday club, by time slot) ============================================================ */
 let FLUENT_SLOT="10h–11h",FLUENT_DATE=null,FLUENT_DRAFT={};
@@ -1010,14 +1010,14 @@ function fluentReport(id){
 }
 function setFluentSlot(s,id){FLUENT_SLOT=s;FLUENT_DRAFT={};renderClass(id);}
 function fluentDraft(name,field,val){FLUENT_DRAFT[name]=FLUENT_DRAFT[name]||{};FLUENT_DRAFT[name][field]=val;}
-function saveFluentReport(id){
- const slot=FLUENT_SLOT;const roster=fluentActive(slot);
+function saveFluentReport(id){try{
+ const slot=FLUENT_SLOT;const roster=fluentActive(slot);const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
  const missing=roster.filter(n=>{const d=FLUENT_DRAFT[n]||{};return (d.att||'Present')!=='Absent' && !((d.obs||'').trim());});
- if(missing.length){toast('✍️ Please write an observation for: '+missing.join(', '));return;}
- const entry={date:$("#fr_date").value||recentMonday(),slot,theme:$("#fr_theme").value,high:$("#fr_high").value,improve:$("#fr_improve").value,rows:{}};
+ if(missing.length){toast('✍️ Please write an observation for: '+missing.map(n=>displayName(id,n)).join(', '));return;}
+ const entry={date:$v('fr_date')||recentMonday(),slot,theme:$v('fr_theme'),high:$v('fr_high'),improve:$v('fr_improve'),rows:{}};
  roster.forEach(n=>{const d=FLUENT_DRAFT[n]||{};entry.rows[n]={att:d.att||'Present',obs:d.obs||''};});
  (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);FLUENT_DRAFT={};save();toast("✅ Class report saved");setTab('overview',id);
-}
+}catch(err){toast('⚠️ Could not save: '+(err&&err.message||err));}}
 function fluentStudents(id){
  const c=getClass(id);
  const blocks=c.slots.map(slot=>{
@@ -1145,12 +1145,12 @@ function cambReport(id){
   <button class="btn" onclick="cambSaveReport('${id}')">💾 Save lesson</button>
   <button class="btn ghost" onclick="setTab('overview','${id}')">Cancel</button>`;
 }
-function cambSaveReport(id){
- const lvl=CAMB_LEVEL;const roster=cambActive(lvl).filter(n=>!cambClosed(n));
- const entry={date:$("#r_date").value||todayISO(),level:lvl,theme:$("#r_theme").value,paper:$("#r_paper").value,high:$("#r_high").value,improve:$("#r_improve").value,rows:{}};
- roster.forEach((n,i)=>{entry.rows[n]={att:$("#att_"+i).value,hw:$("#hw_"+i).value,obs:$("#obs_"+i).value};});
+function cambSaveReport(id){try{
+ const lvl=CAMB_LEVEL;const roster=cambActive(lvl).filter(n=>!cambClosed(n));const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
+ const entry={date:$v('r_date')||todayISO(),level:lvl,theme:$v('r_theme'),paper:$v('r_paper'),high:$v('r_high'),improve:$v('r_improve'),rows:{}};
+ roster.forEach((n,i)=>{entry.rows[n]={att:$v('att_'+i)||'Present',hw:$v('hw_'+i),obs:$v('obs_'+i)};});
  (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();toast("✅ Lesson saved");setTab('overview',id);
-}
+}catch(err){toast('⚠️ Could not save: '+(err&&err.message||err));}}
 function cambMocksTab(id){
  const lvl=CAMB_LEVEL;const info=CAMB_INFO[lvl];const roster=cambActive(lvl);
  const lvlBtns=CAMB_LEVELS.map(l=>`<button class="unit-tab ${l===lvl?'active':''}" onclick="cambSetLevel('${l}','${id}')">${CAMB_INFO[l].emoji} ${l}</button>`).join('');
@@ -1306,23 +1306,23 @@ function phonCell(prefix,idx,r){r=r||{};const sk=r.phsk||{};
  return `<td><div class="phsk-wrap">${checks}</div>${sel}</td>`;}
 function readPhonSkills(prefix,idx){const o={};PHONICS_SKILLS.forEach(([k])=>{const el=$("#"+prefix+"sk_"+k+"_"+idx);o[k]=!!(el&&el.checked);});return o;}
 function markAll(val,n){for(let i=0;i<n;i++){const el=$("#att_"+i);if(el)el.value=val;}}
-function saveReport(id){
- const c=getClass(id);const items=trackItems(c);
+function saveReport(id){try{
+ const c=getClass(id);const items=trackItems(c);const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
  const ui=$("#r_unit");const idx=items.length&&ui?Number(ui.value):null;
  // Observation required for every child who attended (Nursery, Kinder, Kinder Plus)
  if(obsRequired(c)){
    const missing=[];
-   activeStudents(c).forEach((n,i)=>{const att=$("#att_"+i).value;const obs=($("#obs_"+i).value||'').trim();const el=$("#obs_"+i);
+   activeStudents(c).forEach((n,i)=>{const att=$v('att_'+i);const obs=$v('obs_'+i).trim();const el=$("#obs_"+i);
      if(el)el.style.borderColor='';
-     if((att==='Present'||att==='Late')&&!obs){missing.push(n);if(el)el.style.borderColor='var(--bad)';}});
+     if((att==='Present'||att==='Late')&&!obs){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});
    if(missing.length){toast('✍️ Please write an observation for: '+missing.join(', '));
-     const first=c.students.findIndex(n=>missing.includes(n));const fe=$("#obs_"+first);if(fe){try{fe.focus();fe.scrollIntoView({block:'center'});}catch(e){}}
+     const first=activeStudents(c).findIndex(n=>missing.includes(displayName(id,n)));const fe=$("#obs_"+first);if(fe){try{fe.focus();fe.scrollIntoView({block:'center'});}catch(e){}}
      return;}
  }
- const entry={date:$("#r_date").value||todayISO(),theme:$("#r_theme").value,periodIdx:idx,period:idx!=null?items[idx]:'',high:$("#r_high").value,improve:$("#r_improve").value,rows:{}};
- activeStudents(c).forEach((n,i)=>{const row={att:$("#att_"+i).value,hw:$("#hw_"+i).value,dollar:c.kidDollar?Number($("#dol_"+i).value)||0:0,obs:$("#obs_"+i).value};if(c.track==='phonics'&&$("#phon_"+i)){row.phon=$("#phon_"+i).value;row.phsk=readPhonSkills('phon',i);}entry.rows[n]=row;});
+ const entry={date:$v('r_date')||todayISO(),theme:$v('r_theme'),periodIdx:idx,period:idx!=null?items[idx]:'',high:$v('r_high'),improve:$v('r_improve'),rows:{}};
+ activeStudents(c).forEach((n,i)=>{const row={att:$v('att_'+i)||'Present',hw:$v('hw_'+i),dollar:c.kidDollar?(Number($v('dol_'+i))||0):0,obs:$v('obs_'+i)};if(c.track==='phonics'&&$("#phon_"+i)){row.phon=$v('phon_'+i);row.phsk=readPhonSkills('phon',i);}entry.rows[n]=row;});
  (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();toast("✅ Daily report saved");setTab('overview',id);
-}
+}catch(err){toast('⚠️ Could not save the report: '+(err&&err.message||err));}}
 
 /* SKILLS & COMPETENCIES — competencies shown clearly + assessment grid */
 function tabSkills(id){
