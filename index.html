@@ -899,7 +899,7 @@ function tabEditHistory(id){
    ${idx.length?`<div class="tbl-wrap"><table><tr><th>Date</th>${fl?'<th>Slot</th>':''}<th>Theme</th><th>Present</th><th>Obs filled</th><th></th></tr>
    ${idx.map(({s,i})=>{const rows=Object.values(s.rows||{});const present=rows.filter(x=>x.att==='Present'||x.att==='Late').length;const withObs=rows.filter(x=>x.obs&&x.obs.trim()).length;const gap=present>withObs;
      return `<tr><td><b>${esc(s.date||'—')}</b></td>${fl?`<td>${esc(s.slot||'—')}</td>`:''}<td>${esc(s.theme||'—')}${camb&&!s.level?' <span class="badge b-na">no level</span>':''}${s.personalized?' <span class="badge b-na">📗 personalized</span>':''}</td><td>${present}</td><td>${gap?`<span class="badge b-late">${withObs}/${present||rows.length}</span>`:`${withObs}/${rows.length}`}</td>
-       <td style="white-space:nowrap"><button class="btn ghost sm" onclick="editSession('${id}',${i})">✏️ Edit</button> <button class="btn ghost sm" onclick="deleteSession('${id}',${i})">🗑 Delete</button></td></tr>`;}).join('')}
+       <td style="white-space:nowrap">${camb?`<button class="btn ghost sm" onclick="cambMoveReportModal('${id}',${i})" title="Move this report to another level">📓 Move</button> `:''}<button class="btn ghost sm" onclick="editSession('${id}',${i})">✏️ Edit</button> <button class="btn ghost sm" onclick="deleteSession('${id}',${i})">🗑 Delete</button></td></tr>`;}).join('')}
    </table></div>`:`<p class="muted small">No reports${camb?' in this level':''} yet.</p>`}</div>`;
 }
 function editSession(id,i){EDIT_IDX=i;renderClass(id);}
@@ -1170,6 +1170,17 @@ function cambSaveReport(id){try{
  roster.forEach((n,i)=>{entry.rows[n]={att:$v('att_'+i)||'Present',hw:$v('hw_'+i),obs:$v('obs_'+i)};});
  (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();toast("✅ Lesson saved");setTab('overview',id);
 }catch(err){toast('⚠️ Could not save: '+(err&&err.message||err));}}
+/* Move a Cambridge report between exam levels (Starters/Movers/Flyers/B1) — only within Cambridge. */
+function cambMoveReportModal(id,i){const s=sessionsOf(id)[i];if(!s)return;const ex=document.getElementById('cmmodal');if(ex)ex.remove();
+ const opts=CAMB_LEVELS.map(l=>`<option value="${l}" ${s.level===l?'selected':''}>${CAMB_INFO[l].emoji} ${l}</option>`).join('');
+ const w=document.createElement('div');w.id='cmmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:420px;text-align:left"><h2 style="color:var(--navy);font-size:19px">📓 Move report to a level</h2>
+   <p class="small muted">Report of <b>${esc(s.date||'')}</b>${s.theme?(' · '+esc(s.theme)):''}. Current level: <b>${esc(s.level||'—')}</b>.</p>
+   <label class="fl">Level (within Cambridge Prep)</label><select class="inp" id="cm_level">${opts}</select>
+   <div style="margin-top:12px"><button class="btn" onclick="cambMoveReport('${id}',${i})">💾 Save</button>
+   <button class="btn ghost" onclick="document.getElementById('cmmodal').remove()">Cancel</button></div></div>`;
+ document.body.appendChild(w);}
+function cambMoveReport(id,i){const s=sessionsOf(id)[i];if(!s)return;const lv=$("#cm_level")?$("#cm_level").value:'';if(lv)s.level=lv;save();const m=document.getElementById('cmmodal');if(m)m.remove();toast('✅ Report moved to '+esc(lv));EDIT_IDX=null;renderClass(id);}
 /* Personalized Cambridge daily report — a candidate who has a 1:1 lesson, not in a group. */
 function cambPersonalizedModal(id){const ex=document.getElementById('cpmodal');if(ex)ex.remove();
  const all=[];CAMB_LEVELS.forEach(l=>cambRoster(l).forEach(n=>{if(!isArchived('cambridge_prep',n)&&all.indexOf(n)<0)all.push(n);}));
