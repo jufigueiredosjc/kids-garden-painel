@@ -1159,13 +1159,48 @@ function cambReport(id){
   <div class="card"><h3>👧 ${esc(lvl)} candidates (${roster.length})</h3>
    <div class="tbl-wrap"><table><tr><th>Student</th><th>Attendance</th><th>Homework</th><th>Comment (class / homework)</th></tr>${rows||'<tr><td colspan="4" class="muted small">No active students in this level.</td></tr>'}</table></div></div>
   <button class="btn" onclick="cambSaveReport('${id}')">💾 Save lesson</button>
-  <button class="btn ghost" onclick="setTab('overview','${id}')">Cancel</button>`;
+  <button class="btn ghost" onclick="setTab('overview','${id}')">Cancel</button>
+  <div style="margin-top:16px;border-top:1px solid var(--soft);padding-top:14px"><button class="btn" style="background:#1B7A3A;border-color:#1B7A3A" onclick="cambPersonalizedModal('${id}')">📗 Personalized Daily Report</button>
+   <p class="hint" style="margin-top:6px">For a candidate who takes a one-to-one lesson and isn't in a group — pick the child and the level (test) they sit, then log the lesson with the same fields.</p></div>`;
 }
 function cambSaveReport(id){try{
  const lvl=CAMB_LEVEL;const roster=cambActive(lvl).filter(n=>!cambClosed(n));const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
  const entry={date:$v('r_date')||todayISO(),level:lvl,theme:$v('r_theme'),paper:$v('r_paper'),high:$v('r_high'),improve:$v('r_improve'),rows:{}};
  roster.forEach((n,i)=>{entry.rows[n]={att:$v('att_'+i)||'Present',hw:$v('hw_'+i),obs:$v('obs_'+i)};});
  (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();toast("✅ Lesson saved");setTab('overview',id);
+}catch(err){toast('⚠️ Could not save: '+(err&&err.message||err));}}
+/* Personalized Cambridge daily report — a candidate who has a 1:1 lesson, not in a group. */
+function cambPersonalizedModal(id){const ex=document.getElementById('cpmodal');if(ex)ex.remove();
+ const all=[];CAMB_LEVELS.forEach(l=>cambRoster(l).forEach(n=>{if(!isArchived('cambridge_prep',n)&&all.indexOf(n)<0)all.push(n);}));
+ all.sort((a,b)=>displayName('cambridge_prep',a).localeCompare(displayName('cambridge_prep',b)));
+ const stuOpts=all.map(n=>`<option value="${esc(n).replace(/"/g,'&quot;')}">${esc(displayName('cambridge_prep',n))} (${esc(cambLevelOf(n)||'?')})</option>`).join('');
+ const lvlOpts=CAMB_LEVELS.map(l=>`<option value="${l}">${CAMB_INFO[l].emoji} ${l}</option>`).join('');
+ const w=document.createElement('div');w.id='cpmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box" style="border-color:#1B7A3A;max-width:580px;text-align:left;max-height:90vh;overflow:auto"><h2 style="color:#1B7A3A;font-size:19px">📗 Personalized Daily Report</h2>
+  <p class="hint">For a Cambridge child who has a one-to-one lesson and isn't in a group. Pick the child and the level (test) they sit, then log the lesson — same fields as the class report.</p>
+  <div class="row c2"><div><label class="fl">Student</label><select class="inp" id="cp_student" onchange="cpSyncLevel()">${stuOpts||'<option value="">No candidates</option>'}</select></div>
+   <div><label class="fl">Level (test)</label><select class="inp" id="cp_level" onchange="cpRenderPapers()">${lvlOpts}</select></div></div>
+  <div class="row c3" style="margin-top:8px"><div><label class="fl">Date</label><input class="inp" type="date" id="cp_date" value="${todayISO()}"></div>
+   <div><label class="fl">Lesson #</label><input class="inp" id="cp_theme" placeholder="e.g. Starters #14"></div>
+   <div><label class="fl">Focus paper</label><select class="inp" id="cp_paper"><option value="">— general —</option></select></div></div>
+  <div class="row c2" style="margin-top:8px"><div><label class="fl">⭐ High point</label><textarea class="inp" id="cp_high" placeholder="What went well?"></textarea></div>
+   <div><label class="fl">🔧 To improve & how</label><textarea class="inp" id="cp_improve" placeholder="Exam point to target & plan"></textarea></div></div>
+  <div class="row c2" style="margin-top:8px"><div><label class="fl">Attendance</label><select class="inp" id="cp_att">${ATT.map(a=>`<option ${a==='Present'?'selected':''}>${a}</option>`).join('')}</select></div>
+   <div><label class="fl">Homework</label><select class="inp" id="cp_hw">${HW.map(h=>`<option>${esc(h)}</option>`).join('')}</select></div></div>
+  <label class="fl" style="margin-top:8px">Comment (class / homework)</label><textarea class="inp" id="cp_obs" placeholder="Lesson / homework comment"></textarea>
+  <div style="margin-top:12px"><button class="btn" style="background:#1B7A3A;border-color:#1B7A3A" onclick="cambSavePersonalized('${id}')">💾 Save</button>
+  <button class="btn ghost" onclick="document.getElementById('cpmodal').remove()">Dismiss</button></div></div>`;
+ document.body.appendChild(w);setTimeout(()=>{cpSyncLevel();const e=$("#cp_student");if(e)e.focus();},40);}
+function cpRenderPapers(){const lv=$("#cp_level")?$("#cp_level").value:'';const sel=$("#cp_paper");if(!sel)return;const info=CAMB_INFO[lv]||{papers:[]};const cur=sel.value;sel.innerHTML='<option value="">— general —</option>'+(info.papers||[]).map(p=>`<option ${p===cur?'selected':''}>${esc(p)}</option>`).join('');}
+function cpSyncLevel(){const st=$("#cp_student");const lv=$("#cp_level");if(st&&lv){const l=cambLevelOf(st.value);if(l)lv.value=l;}cpRenderPapers();}
+function cambSavePersonalized(id){try{
+ const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
+ const stu=$v('cp_student');if(!stu){toast('Pick the student');return;}
+ const lvl=$v('cp_level')||cambLevelOf(stu)||CAMB_LEVEL;
+ const entry={date:$v('cp_date')||todayISO(),level:lvl,theme:$v('cp_theme'),paper:$v('cp_paper'),high:$v('cp_high'),improve:$v('cp_improve'),personalized:true,rows:{}};
+ entry.rows[stu]={att:$v('cp_att')||'Present',hw:$v('cp_hw'),obs:$v('cp_obs')};
+ (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();
+ const m=document.getElementById('cpmodal');if(m)m.remove();toast('✅ Personalized report saved');render();
 }catch(err){toast('⚠️ Could not save: '+(err&&err.message||err));}}
 function cambMocksTab(id){
  const lvl=CAMB_LEVEL;const info=CAMB_INFO[lvl];const roster=cambActive(lvl);
