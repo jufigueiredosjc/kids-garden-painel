@@ -913,7 +913,8 @@ function addMissedSession(id){const el=$("#add_date");const d=el&&el.value;if(!d
 function editSessionForm(id,i){
  const c=getClass(id);const s=sessionsOf(id)[i];const fl=!!c.fluent;
  let names;
- if(fl){names=fluentRoster(s.slot||c.slots[0]).slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
+ if(s.personalized){names=Object.keys(s.rows||{});}
+ else if(fl){names=fluentRoster(s.slot||c.slots[0]).slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else if(c.special==='cambridge'){names=cambRoster(s.level||'').slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else{names=[...c.students];Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  const ph=c.track==='phonics';
@@ -944,7 +945,8 @@ function editSessionForm(id,i){
 function saveEdit(id,i){try{
  const c=getClass(id);const s=sessionsOf(id)[i];if(!s)return;const fl=!!c.fluent;const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
  let names;
- if(fl){names=fluentRoster(s.slot||c.slots[0]).slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
+ if(s.personalized){names=Object.keys(s.rows||{});}
+ else if(fl){names=fluentRoster(s.slot||c.slots[0]).slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else if(c.special==='cambridge'){names=cambRoster(s.level||'').slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else{names=[...c.students];Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  if(obsRequired(c)){const missing=[];names.forEach((n,k)=>{const att=$v('eatt_'+k);const obs=$v('eobs_'+k).trim();const el=$("#eobs_"+k);if(el)el.style.borderColor='';if((att==='Present'||att==='Late')&&!obs){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});if(missing.length){toast('✍️ Observation required for: '+missing.join(', '));return;}}
@@ -2418,7 +2420,7 @@ function studentReport(cid,name){
    ${recent.length?`<ul style="margin:0 0 0 18px">${recent.map(o=>`<li class="small" style="margin-bottom:6px"><b>${esc(o.date||'')}:</b> ${esc(o.obs)}</li>`).join('')}</ul>`:'<p class="muted small">No written observations yet.</p>'}
    <button class="btn ghost sm" style="margin-top:10px" onclick="openStudent('${cid}','${esc(name).replace(/'/g,"\\'")}','history')">📜 See full history →</button>
   </div>
-  ${(()=>{const ps=[];sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.personalized)ps.push({s,r});});if(!ps.length)return '';return `<div class="card" style="border-color:#1B7A3A;background:linear-gradient(120deg,#EEF8F0,#FFFEF9)"><h3>📗 Personalized lessons</h3><p class="hint">Exclusive / reinforcement lessons logged for this child, including book work pulled from another class.</p>${ps.slice().reverse().map(({s,r})=>`<div class="actrow" style="display:block"><div><b>${esc(s.date||'')}</b> ${r.bookName?`· <span class="badge b-na">📖 ${esc(r.bookName)} book</span>`:''} <span class="badge ${r.att==='Present'?'b-present':(r.att==='Absent'?'b-absent':'b-late')}">${esc(r.att||'')}</span></div><div class="small" style="margin-top:4px">${esc(r.obs||'')}</div>${(r.skills&&Object.keys(r.skills).length)?`<div class="small" style="margin-top:5px"><b>${esc(r.bookLevel||'')} skills:</b> ${Object.keys(r.skills).map(k=>`<span class="chip ${ratingClass(r.skills[k])}">${esc(k)}: ${esc(r.skills[k])}</span>`).join(' ')}</div>`:''}</div>`).join('')}</div>`;})()}
+  ${(()=>{const ps=[];sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&(r.personalized||s.personalized))ps.push({s,r});});if(!ps.length)return '';return `<div class="card" style="border-color:#1B7A3A;background:linear-gradient(120deg,#EEF8F0,#FFFEF9)"><h3>📗 Personalized lessons</h3><p class="hint">Exclusive / reinforcement lessons logged for this child, including book work pulled from another class.</p>${ps.slice().reverse().map(({s,r})=>`<div class="actrow" style="display:block"><div><b>${esc(s.date||'')}</b> ${r.bookName?`· <span class="badge b-na">📖 ${esc(r.bookName)} book</span>`:''} <span class="badge ${r.att==='Present'?'b-present':(r.att==='Absent'?'b-absent':'b-late')}">${esc(r.att||'')}</span></div><div class="small" style="margin-top:4px">${esc(r.obs||'')}</div>${(r.skills&&Object.keys(r.skills).length)?`<div class="small" style="margin-top:5px"><b>${esc(r.bookLevel||'')} skills:</b> ${Object.keys(r.skills).map(k=>`<span class="chip ${ratingClass(r.skills[k])}">${esc(k)}: ${esc(r.skills[k])}</span>`).join(' ')}</div>`:''}</div>`).join('')}</div>`;})()}
   ${(()=>{const acts=studentActions(cid,name);if(!acts.length)return '';return `<div class="card"><h3>🚦 Action follow-ups</h3><p class="hint">Attention points logged by the teacher and the coordination's guidance — kept in this child's record.</p>${acts.map(a=>`<div class="actrow ${a.done?'done':''}" style="display:block"><div><b>${esc(a.solution||a.point||'')}</b> <span class="muted small">${esc(a.date||'')}</span> ${a.done?'<span class="badge b-present">resolved</span>':'<span class="badge b-late">open</span>'}</div>${a.point?`<div class="small muted">Point: ${esc(a.point)}</div>`:''}${actionThreadHtml(cid,a)}</div>`).join('')}</div>`;})()}
   ${pedagogicalOrientationCard(cid,name)}`;
  // charts
