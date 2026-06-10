@@ -881,7 +881,7 @@ function tabEditHistory(id){
   <div class="card"><h3>🗂 ${camb?(esc(lvl)+' reports'):'All reports'} (${idx.length})</h3>
    ${idx.length?`<div class="tbl-wrap"><table><tr><th>Date</th>${fl?'<th>Slot</th>':''}<th>Theme</th><th>Present</th><th>Obs filled</th><th></th></tr>
    ${idx.map(({s,i})=>{const rows=Object.values(s.rows||{});const present=rows.filter(x=>x.att==='Present'||x.att==='Late').length;const withObs=rows.filter(x=>x.obs&&x.obs.trim()).length;const gap=present>withObs;
-     return `<tr><td><b>${esc(s.date||'—')}</b></td>${fl?`<td>${esc(s.slot||'—')}</td>`:''}<td>${esc(s.theme||'—')}${camb&&!s.level?' <span class="badge b-na">no level</span>':''}</td><td>${present}</td><td>${gap?`<span class="badge b-late">${withObs}/${present||rows.length}</span>`:`${withObs}/${rows.length}`}</td>
+     return `<tr><td><b>${esc(s.date||'—')}</b></td>${fl?`<td>${esc(s.slot||'—')}</td>`:''}<td>${esc(s.theme||'—')}${camb&&!s.level?' <span class="badge b-na">no level</span>':''}${s.personalized?' <span class="badge b-na">📗 personalized</span>':''}</td><td>${present}</td><td>${gap?`<span class="badge b-late">${withObs}/${present||rows.length}</span>`:`${withObs}/${rows.length}`}</td>
        <td style="white-space:nowrap"><button class="btn ghost sm" onclick="editSession('${id}',${i})">✏️ Edit</button> <button class="btn ghost sm" onclick="deleteSession('${id}',${i})">🗑 Delete</button></td></tr>`;}).join('')}
    </table></div>`:`<p class="muted small">No reports${camb?' in this level':''} yet.</p>`}</div>`;
 }
@@ -1287,7 +1287,9 @@ function tabReport(id){
    <div class="tbl-wrap"><table><tr><th>Student</th><th>Attendance</th><th>Homework</th>${c.kidDollar?'<th>Kid\'s $</th>':''}${ph?'<th>Sound of the day — skills & level</th>':''}<th>Observation${obsRequired(c)?' *':''}</th></tr>${rows}</table></div></div>
   ${ph?phonicsRef():''}
   <button class="btn" onclick="saveReport('${id}')">💾 Save daily report</button>
-  <button class="btn ghost" onclick="setTab('overview','${id}')">Cancel</button>`;
+  <button class="btn ghost" onclick="setTab('overview','${id}')">Cancel</button>
+  <div style="margin-top:16px;border-top:1px solid var(--soft);padding-top:14px"><button class="btn" style="background:#1B7A3A;border-color:#1B7A3A" onclick="personalizedReportModal('${id}')">📗 Personalized Daily Report</button>
+   <p class="hint" style="margin-top:6px">For an exclusive / reinforcement lesson with a single child — and to pull the book &amp; skills of another class into this child's history.</p></div>`;
 }
 function phonicsRef(){
  const groups=PHONICS_SOUNDS.slice(0,7).map((s,i)=>`<div class="comp"><h5>${esc(PHONICS_GROUPS[i].split(' · ')[0])}</h5><div class="chips">${s.map(x=>`<span class="chip">🔊 ${esc(x)}</span>`).join('')}</div></div>`).join('');
@@ -1323,6 +1325,38 @@ function saveReport(id){try{
  activeStudents(c).forEach((n,i)=>{const row={att:$v('att_'+i)||'Present',hw:$v('hw_'+i),dollar:c.kidDollar?(Number($v('dol_'+i))||0):0,obs:$v('obs_'+i)};if(c.track==='phonics'&&$("#phon_"+i)){row.phon=$v('phon_'+i);row.phsk=readPhonSkills('phon',i);}entry.rows[n]=row;});
  (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();toast("✅ Daily report saved");setTab('overview',id);
 }catch(err){toast('⚠️ Could not save the report: '+(err&&err.message||err));}}
+/* ===== Personalized daily report — exclusive/reinforcement lesson for one child,
+   optionally pulling the Skills & Competencies framework of another class (the book that child follows). ===== */
+function pzSkillsHtml(level){const set=SKILLSETS[level];if(!set||!set.length)return '<p class="muted small">This class has no skills framework.</p>';
+ return `<div class="tbl-wrap"><table><tr><th>Skill</th><th>How did they do?</th></tr>${set.map(sk=>`<tr><td><b>${esc(sk)}</b></td><td><select class="att-sel" data-skill="${esc(sk)}">${RATING.map(r=>`<option>${esc(r)}</option>`).join('')}</select></td></tr>`).join('')}</table></div>`;}
+function pzOnSourceChange(){const sel=$("#pz_source");const div=$("#pz_skills");if(!sel||!div)return;const cid=sel.value;if(!cid){div.innerHTML='';return;}const c=getClass(cid);const lvl=c?c.level:null;
+ div.innerHTML=`<p class="small muted" style="margin:8px 0 4px">Assess this child on the <b>${esc(c?c.name:cid)}</b> book — Skills &amp; Competencies (${esc(lvl||'')}). Rate only what applies; leave the rest as “Not assessed”.</p>`+pzSkillsHtml(lvl);}
+function personalizedReportModal(id){const c=getClass(id);if(!c)return;const ex=document.getElementById('pzmodal');if(ex)ex.remove();
+ const stuOpts=activeStudents(c).map(n=>`<option value="${esc(n).replace(/"/g,'&quot;')}">${esc(displayName(id,n))}</option>`).join('');
+ const srcOpts='<option value="">— none (no book from another class) —</option>'+CLASSES.filter(x=>x.id!==id&&!x.fluent).map(x=>`<option value="${x.id}">${esc(x.name)}${x.time?(' · '+esc(x.time)):''} — ${esc(x.level||'')}</option>`).join('');
+ const w=document.createElement('div');w.id='pzmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box" style="border-color:#1B7A3A;max-width:560px;text-align:left;max-height:90vh;overflow:auto"><h2 style="color:#1B7A3A;font-size:19px">📗 Personalized Daily Report</h2>
+  <p class="hint">For an exclusive / reinforcement lesson with one child. You can pull the <b>Skills &amp; Competencies</b> of another class — useful when the child does the project with this class but the <b>book of another class</b>.</p>
+  <div class="row c2"><div><label class="fl">Student</label><select class="inp" id="pz_student">${stuOpts||'<option value="">No students</option>'}</select></div>
+   <div><label class="fl">Date</label><input class="inp" type="date" id="pz_date" value="${todayISO()}"></div></div>
+  <div class="row c2" style="margin-top:8px"><div><label class="fl">Attendance</label><select class="inp" id="pz_att">${ATT.map(a=>`<option ${a==='Present'?'selected':''}>${a}</option>`).join('')}</select></div>
+   <div><label class="fl">📖 Book / skills from another class (optional)</label><select class="inp" id="pz_source" onchange="pzOnSourceChange()">${srcOpts}</select></div></div>
+  <div id="pz_skills"></div>
+  <label class="fl" style="margin-top:10px">Observation — what happened in this lesson *</label><textarea class="inp" id="pz_obs" placeholder="What you worked on and how the child did"></textarea>
+  <div style="margin-top:12px"><button class="btn" style="background:#1B7A3A;border-color:#1B7A3A" onclick="savePersonalizedReport('${id}')">💾 Save</button>
+  <button class="btn ghost" onclick="document.getElementById('pzmodal').remove()">Dismiss</button></div></div>`;
+ document.body.appendChild(w);setTimeout(()=>{const e=$("#pz_student");if(e)e.focus();},40);}
+function savePersonalizedReport(id){try{
+ const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
+ const stu=$v('pz_student');if(!stu){toast('Pick the student');return;}
+ const obs=$v('pz_obs').trim();if(!obs){toast('Please write what happened in the lesson');return;}
+ const date=$v('pz_date')||todayISO();const att=$v('pz_att')||'Present';const src=$v('pz_source');
+ const row={att,hw:'',dollar:0,obs,personalized:true};
+ if(src){const c2=getClass(src);row.bookClass=src;row.bookLevel=c2?c2.level:'';row.bookName=c2?c2.name:src;const skills={};const sd=document.getElementById('pz_skills');if(sd){sd.querySelectorAll('[data-skill]').forEach(el=>{const v=el.value;if(v&&v!=='Not assessed')skills[el.getAttribute('data-skill')]=v;});}row.skills=skills;}
+ const entry={date,personalized:true,theme:row.bookName?('Personalized · '+row.bookName+' book'):'Personalized lesson',high:'',improve:'',rows:{}};entry.rows[stu]=row;
+ (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();
+ const m=document.getElementById('pzmodal');if(m)m.remove();toast('✅ Personalized report saved');render();
+}catch(err){toast('⚠️ Could not save: '+(err&&err.message||err));}}
 
 /* SKILLS & COMPETENCIES — competencies shown clearly + assessment grid */
 function tabSkills(id){
@@ -2320,6 +2354,7 @@ function studentReport(cid,name){
    ${recent.length?`<ul style="margin:0 0 0 18px">${recent.map(o=>`<li class="small" style="margin-bottom:6px"><b>${esc(o.date||'')}:</b> ${esc(o.obs)}</li>`).join('')}</ul>`:'<p class="muted small">No written observations yet.</p>'}
    <button class="btn ghost sm" style="margin-top:10px" onclick="openStudent('${cid}','${esc(name).replace(/'/g,"\\'")}','history')">📜 See full history →</button>
   </div>
+  ${(()=>{const ps=[];sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.personalized)ps.push({s,r});});if(!ps.length)return '';return `<div class="card" style="border-color:#1B7A3A;background:linear-gradient(120deg,#EEF8F0,#FFFEF9)"><h3>📗 Personalized lessons</h3><p class="hint">Exclusive / reinforcement lessons logged for this child, including book work pulled from another class.</p>${ps.slice().reverse().map(({s,r})=>`<div class="actrow" style="display:block"><div><b>${esc(s.date||'')}</b> ${r.bookName?`· <span class="badge b-na">📖 ${esc(r.bookName)} book</span>`:''} <span class="badge ${r.att==='Present'?'b-present':(r.att==='Absent'?'b-absent':'b-late')}">${esc(r.att||'')}</span></div><div class="small" style="margin-top:4px">${esc(r.obs||'')}</div>${(r.skills&&Object.keys(r.skills).length)?`<div class="small" style="margin-top:5px"><b>${esc(r.bookLevel||'')} skills:</b> ${Object.keys(r.skills).map(k=>`<span class="chip ${ratingClass(r.skills[k])}">${esc(k)}: ${esc(r.skills[k])}</span>`).join(' ')}</div>`:''}</div>`).join('')}</div>`;})()}
   ${(()=>{const acts=studentActions(cid,name);if(!acts.length)return '';return `<div class="card"><h3>🚦 Action follow-ups</h3><p class="hint">Attention points logged by the teacher and the coordination's guidance — kept in this child's record.</p>${acts.map(a=>`<div class="actrow ${a.done?'done':''}" style="display:block"><div><b>${esc(a.solution||a.point||'')}</b> <span class="muted small">${esc(a.date||'')}</span> ${a.done?'<span class="badge b-present">resolved</span>':'<span class="badge b-late">open</span>'}</div>${a.point?`<div class="small muted">Point: ${esc(a.point)}</div>`:''}${actionThreadHtml(cid,a)}</div>`).join('')}</div>`;})()}
   ${pedagogicalOrientationCard(cid,name)}`;
  // charts
