@@ -360,6 +360,7 @@ function allStudentsAdmin(){const out=[];const seen={};
  const order=CLASSES.slice().sort((a,b)=>(((a.fluent||a.special==='cambridge')?1:0)-((b.fluent||b.special==='cambridge')?1:0)));
  order.forEach(c=>{activeStudents(c).forEach(n=>{const full=displayName(c.id,n);const key=full.trim().toLowerCase();if(seen[key])return;seen[key]=1;out.push({cid:c.id,name:n,full,dob:dobOf(c.id,n),className:c.name});});});
  return out.sort((a,b)=>a.full.localeCompare(b.full));}
+function filterManageChildren(q){q=(q||'').trim().toLowerCase();document.querySelectorAll('.mng-row').forEach(function(tr){const cn=tr.getAttribute('data-cn')||'';tr.style.display=(!q||cn.indexOf(q)>=0)?'':'none';});}
 
 /* skill sets by level */
 const SKILLSETS={
@@ -1922,7 +1923,7 @@ function renderCoordGate(){
 function tryPwd(){const el=$("#pwd");const val=el?String(el.value).trim():'';if(val===COORD_PWD){COORD_OK=true;COORD_TAB='overview';toast("✅ Welcome, Coordination");renderCoord();}else toast("❌ Wrong password");}
 function renderCoord(){
  const totalPend=CLASSES.reduce((a,c)=>a+pendingFor(c.id,'coord').length,0);
- const bt=birthdaysToday().length;const fc=coordPendingActions().length;const tabs=[['overview','📊 Class Performance'],['teachers','⏰ Teacher Compliance'],['attention','🔎 Children to Watch'],['follow','🚦 Follow-ups'+(fc?` (${fc})`:'')],['reports','📄 Progress Reports'],['messages','✉️ Messages'+(totalPend?` (${totalPend})`:'')],['birthdays','🎂 Birthdays'+(bt?` (${bt})`:'')],['structure','🏗 Structural Organization']];
+ const bt=birthdaysToday().length;const fc=coordPendingActions().length;const tabs=[['overview','📊 Class Performance'],['teachers','⏰ Teacher Compliance'],['attention','🔎 Children to Watch'],['follow','🚦 Follow-ups'+(fc?` (${fc})`:'')],['reports','📄 Progress Reports'],['messages','✉️ Messages'+(totalPend?` (${totalPend})`:'')],['birthdays','👧 Students/Birthdays'+(bt?` (${bt})`:'')],['structure','🏗 Structural Organization']];
  app().innerHTML=`<div class="page-head"><button class="back" onclick="go('home')">← Home</button>
    <div><h2>🧭 Coordination Dashboard</h2><div class="sub">Full pedagogical oversight · ${CLASSES.filter(c=>c.count).length} classes · ${countedStudents()} students</div></div></div>
   <div class="tabs">${tabs.map(t=>`<button class="tab ${COORD_TAB===t[0]?'active':''}" onclick="setCoordTab('${t[0]}')">${t[1]}</button>`).join('')}</div>
@@ -1950,8 +1951,9 @@ function coordBirthdays(){
   <div class="card"><h3>🎂 Upcoming birthdays (next 30 days)</h3>
    ${soon.length?`<div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>When</th><th>Turning</th></tr>${soon.map(row).join('')}</table></div>`:'<p class="muted small">No birthdays in the next 30 days.</p>'}</div>
   ${(()=>{const all=allStudentsAdmin();return `<div class="card"><h3>👧 Manage children</h3>
-   <p class="hint">Every child on the panel. Use <b>✏️ Modify</b> to rename, fix the birthday or move the child to another class (records follow the move), or <b>🗑 Delete</b> to remove them. ${all.length} children.</p>
-   <div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Turning</th><th>Actions</th></tr>${all.map(s=>{const ns=esc(s.name).replace(/'/g,"\\'");const age=ageTurning(s.dob);return `<tr><td><b>${esc(s.full)}</b></td><td>${esc(s.className)}</td><td>${s.dob?('🎂 '+esc(fmtBday(s.dob))):'<span class="muted small">—</span>'}</td><td>${age!=null?('turns '+age):'<span class="muted small">—</span>'}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="editStudentModal('${s.cid}','${ns}')">✏️ Modify</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteStudentPermanently('${s.cid}','${ns}')">🗑 Delete</button></td></tr>`;}).join('')}</table></div>
+   <p class="hint">Every child on the panel, always in alphabetical order. Use <b>✏️ Modify</b> to rename, fix the birthday or move the child to another class (records follow the move), or <b>🗑 Delete</b> to remove them. ${all.length} children.</p>
+   <input class="inp" placeholder="🔍 Search a child by name or class…" oninput="filterManageChildren(this.value)" style="max-width:380px;margin-bottom:10px">
+   <div class="tbl-wrap"><table id="mngTable"><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Turning</th><th>Actions</th></tr>${all.map(s=>{const ns=esc(s.name).replace(/'/g,"\\'");const age=ageTurning(s.dob);return `<tr class="mng-row" data-cn="${esc((s.full+' '+s.className).toLowerCase())}"><td><b>${esc(s.full)}</b></td><td>${esc(s.className)}</td><td>${s.dob?('🎂 '+esc(fmtBday(s.dob))):'<span class="muted small">—</span>'}</td><td>${age!=null?('turns '+age):'<span class="muted small">—</span>'}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="editStudentModal('${s.cid}','${ns}')">✏️ Modify</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteStudentPermanently('${s.cid}','${ns}')">🗑 Delete</button></td></tr>`;}).join('')}</table></div>
    <button class="btn" style="margin-top:12px" onclick="addStudentCoordModal()">➕ Add a student</button></div>`;})()}`;
 }
 function coordMsgBanner(){
