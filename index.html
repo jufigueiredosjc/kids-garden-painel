@@ -173,6 +173,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:16px 0}
 /* ============================================================ DATA ============================================================ */
 const COORD_PWD="@309";
 const ATT=["Present","Late","Absent"];
+const ATT_EDIT=["Present","Late","Absent","Not enrolled"];
 const HW=["Done","Didn't do","No homework"];
 const RATING=["Not assessed","Developing","Proficient"];
 const NURSERY_SCALE=["Not yet","Emerging","Confident"];
@@ -917,7 +918,7 @@ function editSessionForm(id,i){
  else{names=[...c.students];Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  const ph=c.track==='phonics';
  const rows=names.map((n,k)=>{const r=(s.rows||{})[n]||{};return `<tr><td><b>${esc(displayName(id,n))}</b>${programTagsHtml(id,n)}</td>
-   <td><select class="att-sel" id="eatt_${k}">${ATT.map(a=>`<option ${(r.att||'Present')===a?'selected':''}>${a}</option>`).join('')}</select></td>
+   <td><select class="att-sel" id="eatt_${k}">${ATT_EDIT.map(a=>`<option ${(r.att||'Present')===a?'selected':''}>${a}</option>`).join('')}</select></td>
    ${fl?'':`<td><select class="att-sel" id="ehw_${k}">${HW.map(h=>`<option ${(r.hw||'')===h?'selected':''}>${h}</option>`).join('')}</select></td>`}
    ${(!fl&&c.kidDollar)?`<td><input class="inp" style="width:64px;padding:5px 8px" type="number" min="0" value="${Number(r.dollar)||0}" id="edol_${k}"></td>`:''}
    ${ph?phonCell('ephon',k,r):''}
