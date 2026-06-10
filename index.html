@@ -174,6 +174,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:16px 0}
 const COORD_PWD="@309";
 const ATT=["Present","Late","Absent"];
 const ATT_EDIT=["Present","Late","Absent","Not enrolled"];
+const ATT_CAMB=["Present","Late","Absent","Not this slot"];
 const HW=["Done","Didn't do","No homework"];
 const RATING=["Not assessed","Developing","Proficient"];
 const NURSERY_SCALE=["Not yet","Emerging","Confident"];
@@ -919,7 +920,7 @@ function editSessionForm(id,i){
  else{names=[...c.students];Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  const ph=c.track==='phonics';
  const rows=names.map((n,k)=>{const r=(s.rows||{})[n]||{};return `<tr><td><b>${esc(displayName(id,n))}</b>${programTagsHtml(id,n)}</td>
-   <td><select class="att-sel" id="eatt_${k}">${ATT_EDIT.map(a=>`<option ${(r.att||'Present')===a?'selected':''}>${a}</option>`).join('')}</select></td>
+   <td><select class="att-sel" id="eatt_${k}">${(c.special==='cambridge'?ATT_EDIT.concat(['Not this slot']):ATT_EDIT).map(a=>`<option ${(r.att||'Present')===a?'selected':''}>${a}</option>`).join('')}</select></td>
    ${fl?'':`<td><select class="att-sel" id="ehw_${k}">${HW.map(h=>`<option ${(r.hw||'')===h?'selected':''}>${h}</option>`).join('')}</select></td>`}
    ${(!fl&&c.kidDollar)?`<td><input class="inp" style="width:64px;padding:5px 8px" type="number" min="0" value="${Number(r.dollar)||0}" id="edol_${k}"></td>`:''}
    ${ph?phonCell('ephon',k,r):''}
@@ -1143,7 +1144,7 @@ function cambReport(id){
  const c=getClass(id);const lvl=CAMB_LEVEL;const roster=cambActive(lvl).filter(n=>!cambClosed(n));
  const lvlBtns=CAMB_LEVELS.map(l=>`<button class="unit-tab ${l===lvl?'active':''}" onclick="cambSetLevel('${l}','${id}')">${CAMB_INFO[l].emoji} ${l}</button>`).join('');
  const rows=roster.map((n,i)=>`<tr><td><b>${esc(displayName(id,n))}</b></td>
-   <td><select class="att-sel" id="att_${i}">${ATT.map(a=>`<option ${a==='Present'?'selected':''}>${a}</option>`).join('')}</select></td>
+   <td><select class="att-sel" id="att_${i}">${ATT_CAMB.map(a=>`<option ${a==='Present'?'selected':''}>${a}</option>`).join('')}</select></td>
    <td><select class="att-sel" id="hw_${i}">${HW.map(h=>`<option>${h}</option>`).join('')}</select></td>
    <td><input class="inp" style="min-width:240px;padding:6px 9px" id="obs_${i}" placeholder="Lesson / homework comment"></td></tr>`).join('');
  return `
@@ -1199,7 +1200,7 @@ function cambPersonalizedModal(id){const ex=document.getElementById('cpmodal');i
    <div><label class="fl">Focus paper</label><select class="inp" id="cp_paper"><option value="">— general —</option></select></div></div>
   <div class="row c2" style="margin-top:8px"><div><label class="fl">⭐ High point</label><textarea class="inp" id="cp_high" placeholder="What went well?"></textarea></div>
    <div><label class="fl">🔧 To improve & how</label><textarea class="inp" id="cp_improve" placeholder="Exam point to target & plan"></textarea></div></div>
-  <div class="row c2" style="margin-top:8px"><div><label class="fl">Attendance</label><select class="inp" id="cp_att">${ATT.map(a=>`<option ${a==='Present'?'selected':''}>${a}</option>`).join('')}</select></div>
+  <div class="row c2" style="margin-top:8px"><div><label class="fl">Attendance</label><select class="inp" id="cp_att">${ATT_CAMB.map(a=>`<option ${a==='Present'?'selected':''}>${a}</option>`).join('')}</select></div>
    <div><label class="fl">Homework</label><select class="inp" id="cp_hw">${HW.map(h=>`<option>${esc(h)}</option>`).join('')}</select></div></div>
   <label class="fl" style="margin-top:8px">Comment (class / homework)</label><textarea class="inp" id="cp_obs" placeholder="Lesson / homework comment"></textarea>
   <div style="margin-top:12px"><button class="btn" style="background:#1B7A3A;border-color:#1B7A3A" onclick="cambSavePersonalized('${id}')">💾 Save</button>
