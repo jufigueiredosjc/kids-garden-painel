@@ -2316,6 +2316,33 @@ function phonLevelMeta(v){
  if(v==='Blends & reads it')return{e:'🔗',t:'Blending',bg:'#2C6FB0'};
  if(v==='Recognises the sound')return{e:'👂',t:'Recognising',bg:'#FF914D'};
  return{e:'◻',t:'Needs support',bg:'#90A4AE'};}
+/* AI specialist phonics comment — reads the per-sound levels, the 4 Jolly Phonics skills the teacher
+   ticked, and the written observations, to give coordination & teacher a brief, neuroscience-based conclusion.
+   Supports, never replaces, the teacher's judgement. Generated client-side; nothing stored. */
+function phonicsComment(cid,name,list,sec,bl,rec,ns){
+ const n=list.length;if(!n)return '';
+ const first=esc((displayName(cid,name)||name).split(' ')[0]);
+ const skCount={h:0,s:0,f:0,b:0};list.forEach(e=>{const sk=e.phsk||{};['h','s','f','b'].forEach(k=>{if(sk[k])skCount[k]++;});});
+ const pct=k=>n?Math.round(skCount[k]/n*100):0;
+ const labels={h:'hearing the sound',s:'saying the pure sound',f:'forming the letter',b:'blending to read'};
+ const obs=list.map(e=>e.obs||'').join(' ').toLowerCase();
+ const reading=sec+bl;let parts=[];
+ if(sec>=Math.ceil(n*0.6))parts.push(`${first} reads and writes most of the sounds worked on with security — a solid Jolly Phonics foundation, ready to extend to digraphs and longer blends.`);
+ else if(reading>=Math.ceil(n*0.5))parts.push(`${first} has reached the key milestone of <b>blending sounds to read</b> on most sounds — where decoding really takes off; keep consolidating so it becomes automatic.`);
+ else if(rec>=Math.ceil(n*0.5))parts.push(`${first} is securely <b>recognising</b> the sounds and building the aural foundation; the next target is blending two or three known sounds into a word (s-a-t → sat).`);
+ else parts.push(`${first} is in the early, exploratory stage with the sounds and will progress best with frequent, playful, multisensory exposure before pushing decoding.`);
+ const strong=['h','s','f','b'].filter(k=>pct(k)>=70);const weak=['h','s','f','b'].filter(k=>pct(k)<=40);
+ if(strong.length)parts.push(`Strongest so far: ${strong.map(k=>labels[k]).join(', ')}.`);
+ if(weak.length)parts.push(`Still developing: ${weak.map(k=>labels[k]).join(', ')}.`);
+ if(pct('b')<=40&&(pct('h')>=60||pct('s')>=60))parts.push(`The ear and voice are ahead of decoding — prioritise short daily <b>blending</b> drills using only the secure sounds.`);
+ else if(pct('f')<=40&&pct('s')>=60)parts.push(`Sounds are known orally but <b>letter formation</b> lags — anchor each sound with see–say–trace (air-writing, sand, finger tracing).`);
+ if(obs.indexOf('confus')>=0||obs.indexOf('mix')>=0)parts.push(`Separate the confusable sounds in time and give each a strong action and visual anchor.`);
+ if(obs.indexOf('shy')>=0||obs.indexOf('quiet')>=0||obs.indexOf('confiden')>=0)parts.push(`Keep oral phonics low-pressure so the affective filter stays low and the sounds become automatic.`);
+ parts.push(`Neuroscience note: one new sound at a time plus short, spaced retrieval of known sounds wires the sound–symbol link far more durably than long sessions.`);
+ return `<div style="margin-top:12px;border-top:1px dashed #CBA6E0;padding-top:10px"><b>🧠 Phonics specialist comment</b> <span class="muted small">(AI — Jolly Phonics for foreign learners · neuroscience-based)</span>
+  <p class="small" style="line-height:1.65;margin-top:5px">${parts.slice(0,5).join(' ')}</p>
+  <p class="small muted" style="margin-top:5px">Skill coverage across ${n} sound${n>1?'s':''}: 👂 hears ${pct('h')}% · 🗣 says ${pct('s')}% · ✍️ forms ${pct('f')}% · 🔗 blends ${pct('b')}%. Auto-generated from the teacher's records — it supports, never replaces, your judgement.</p></div>`;
+}
 function phonicsProgressCard(cid,name){
  const entries=studentRows(cid,name).filter(r=>(r.phon&&r.phon!=='— not marked')||(r.phsk&&Object.values(r.phsk).some(Boolean)));
  if(!entries.length)return `<div class="card"><h3>🔡 Phonics progress (Jolly Phonics)</h3><p class="muted small">No phonics recorded yet. As the teacher logs the daily sound and how the child did, this builds automatically.</p></div>`;
@@ -2331,7 +2358,7 @@ function phonicsProgressCard(cid,name){
    <p class="hint">From the daily reports — the latest record for each sound the child has worked on.</p>
    <p class="small"><b>${list.length}</b> sound${list.length>1?'s':''} practised · <b>${sec}</b> ✍️ secure · <b>${bl}</b> 🔗 blending · <b>${rec}</b> 👂 recognising${ns?` · <b>${ns}</b> ◻ need support`:''}</p>
    <div class="phchips">${chips}</div>
-   <p class="small muted" style="margin-top:8px">Each chip = a sound. Badge = overall level. Small icons = skills seen (👂 hears · 🗣 says · ✍️ forms the letter · 🔗 blends to read; faded = not yet).</p></div>`;}
+   <p class="small muted" style="margin-top:8px">Each chip = a sound. Badge = overall level. Small icons = skills seen (👂 hears · 🗣 says · ✍️ forms the letter · 🔗 blends to read; faded = not yet).</p>${phonicsComment(cid,name,list,sec,bl,rec,ns)}</div>`;}
 /* Auto pedagogical orientation — reads the structured signals + the teacher's own written
    observations (theme detection) and returns a brief, neuroscience-based steer for the teacher.
    Supports, never replaces, the teacher's judgement. Generated client-side; nothing is stored. */
