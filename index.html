@@ -1749,6 +1749,28 @@ function renderLearning(){
 
 /* ============================================================ COORDINATION ============================================================ */
 let COORD_OK=false,COORD_TAB='overview',COORD_ACT_POPPED=false;
+/* ===== CRM sync — exports the regular class structure to the commercial CRM Google Sheet =====
+   Sends ONLY: periodo, nome_turma, faixa_etaria, professor (1st name), dias, horario.
+   NEVER sends children's names or the vagas (those are managed only in the CRM).
+   Cambridge Prep + Fluent Steps are excluded; Teens B1/B2 and Pietro are included. */
+const CRM_CFG={url:"https://script.google.com/macros/s/AKfycbyQWitiEZB0SOcD0--laTQVcxFnS72VPgWhE8sSVIAsD-3idqMZfRGYLA6Ig5nkPa8V/exec",token:"kidsgarden@309"};
+function crmTeacherName(t){t=String(t||'').trim();var had=/^(Mr|Mrs|Ms|Miss)\.?\s+/i.test(t);var s=t.replace(/^(Mr|Mrs|Ms|Miss)\.?\s+/i,'').trim();var out;if(/^Ana\s+Luiza/i.test(s))out='Ana Luiza';else if(!had)out=s;else out=s.split(/\s+/)[0]||s;if(/^Caue$/i.test(out))out='Cauê';return out;}
+function crmPeriodo(t){t=String(t||'').toUpperCase();if(t.indexOf('AM')>=0)return 'Manhã';if(t.indexOf('PM')>=0)return 'Tarde';return '';}
+function crmDays(d){d=String(d||'');var M={Mon:'Segunda',Tue:'Terça',Wed:'Quarta',Thu:'Quinta',Fri:'Sexta'};var m=d.match(/(Mon|Tue|Wed|Thu|Fri)\s*&\s*(Mon|Tue|Wed|Thu|Fri)/);if(m)return M[m[1]]+' e '+M[m[2]];if(/mondays?\s*only/i.test(d))return 'Segunda';return d.replace(/Mon/g,'Segunda').replace(/Tue/g,'Terça').replace(/Wed/g,'Quarta').replace(/Thu/g,'Quinta').replace(/Fri/g,'Sexta');}
+function crmFaixa(c){var L=LEVELS[c.level]||{};return String(c.age||L.age||'').replace(/yrs?/i,'anos').trim();}
+function crmRows(){return CLASSES.filter(c=>!c.fluent&&c.special!=='cambridge').map(c=>{var per=crmPeriodo(c.time);return {periodo:per,nome_turma:c.name,faixa_etaria:crmFaixa(c),professor:crmTeacherName(c.teacher),dias:crmDays(c.days),horario:per};});}
+function crmPreview(){return crmRows().map(r=>`${r.periodo||'—'} · ${r.nome_turma} · ${r.faixa_etaria} · ${r.professor} · ${r.dias}`).join('\n');}
+async function crmExport(){
+ if(!CRM_CFG.url){toast('⚠️ CRM endpoint not set yet');return;}
+ var rows=crmRows();
+ if(!confirm('Send '+rows.length+' classes to the CRM sheet?\n(period · class · age · teacher · days — never the children, never the vagas)\n\n'+crmPreview()))return;
+ try{
+  var res=await fetch(CRM_CFG.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:CRM_CFG.token,rows:rows})});
+  var j=null;try{j=await res.json();}catch(e){}
+  if(j&&j.ok)toast('✅ '+(j.written||rows.length)+' turmas sent to the CRM sheet');
+  else toast('📤 Sent — please confirm in the CRM sheet');
+ }catch(err){toast('📤 Sent to the CRM (no read-back): '+(err&&err.message||err));}
+}
 function coordStructure(){
  const rows=CLASSES.map(c=>{const L=LEVELS[c.level]||{};const custom=(STATE.customClasses||[]).some(x=>x.id===c.id);
   return `<tr><td><b>${esc(c.name)}</b> <span class="muted small">${esc(c.time||'')}</span>${custom?' <span class="badge b-na">added</span>':''}</td>
@@ -1764,7 +1786,11 @@ function coordStructure(){
    <p class="hint">Teachers come from the classes above, so adding a class or changing a class teacher updates this automatically. Rename a teacher everywhere at once, or remove one who left the school (reassign their classes first).</p>
    <div class="tbl-wrap"><table><tr><th>Teacher</th><th>Classes</th><th></th></tr>
    ${allTeacherNames().map(t=>{const ids=teacherClassIds(t);const te=esc(t).replace(/'/g,"\\'");return `<tr><td><b>${esc(t)}</b></td><td>${ids.length?teacherClassList(t).map(c=>esc(c.name)).join(', '):'<span class="muted small">none (left?)</span>'}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="renameTeacherModal('${te}')">✏️ Rename everywhere</button> ${ids.length?'<button class="btn ghost sm" disabled title="Reassign their classes first">🗑 Remove</button>':`<button class="btn ghost sm" onclick="removeTeacher('${te}')">🗑 Remove</button>`}</td></tr>`;}).join('')}
-   </table></div></div>`;
+   </table></div></div>
+  <div class="card"><h3>🔗 CRM — turmas (comercial)</h3>
+   <p class="hint">Sends the <b>regular class structure</b> (period · class · age · teacher first-name · days) to the commercial CRM's Google Sheet, so the sales team always sees the up-to-date class days. <b>Never</b> sends children's names or the vagas — those stay in the CRM.</p>
+   <div class="flag ok"><span class="fi">${CRM_CFG.url?'✅':'⏳'}</span><div>${CRM_CFG.url?('Connected — '+crmRows().length+' classes will be sent. Cambridge Prep &amp; Fluent Steps are excluded; children &amp; vagas are never sent.'):'Waiting for the Web App URL + secret to activate the button below.'}</div></div>
+   <button class="btn orange" style="margin-top:10px" ${CRM_CFG.url?'':'disabled'} onclick="crmExport()">📤 Export classes → CRM</button></div>`;
 }
 function editClassModal(id){const c=getClass(id);if(!c)return;const ex=document.getElementById('clmodal');if(ex)ex.remove();const lv=LEVELS[c.level]||{};
  const w=document.createElement('div');w.id='clmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
