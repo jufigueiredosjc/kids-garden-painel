@@ -1758,7 +1758,7 @@ function crmTeacherName(t){t=String(t||'').trim();var had=/^(Mr|Mrs|Ms|Miss)\.?\
 function crmPeriodo(t){t=String(t||'').toUpperCase();if(t.indexOf('AM')>=0)return 'Manhã';if(t.indexOf('PM')>=0)return 'Tarde';return '';}
 function crmDays(d){d=String(d||'');var M={Mon:'Segunda',Tue:'Terça',Wed:'Quarta',Thu:'Quinta',Fri:'Sexta'};var m=d.match(/(Mon|Tue|Wed|Thu|Fri)\s*&\s*(Mon|Tue|Wed|Thu|Fri)/);if(m)return M[m[1]]+' e '+M[m[2]];if(/mondays?\s*only/i.test(d))return 'Segunda';return d.replace(/Mon/g,'Segunda').replace(/Tue/g,'Terça').replace(/Wed/g,'Quarta').replace(/Thu/g,'Quinta').replace(/Fri/g,'Sexta');}
 function crmFaixa(c){var L=LEVELS[c.level]||{};return String(c.age||L.age||'').replace(/yrs?/i,'anos').trim();}
-function crmRows(){return CLASSES.filter(c=>!c.fluent&&c.special!=='cambridge').map(c=>{var per=crmPeriodo(c.time);return {periodo:per,nome_turma:c.name,faixa_etaria:crmFaixa(c),professor:crmTeacherName(c.teacher),dias:crmDays(c.days),horario:per,vagas_ocupadas:activeStudents(c).length};});}
+function crmRows(){return CLASSES.filter(c=>!c.fluent&&c.special!=='cambridge').map(c=>{var per=crmPeriodo(c.time);if(!per&&c.id==='pietro_1on1')per='Tarde';return {periodo:per,nome_turma:c.name,faixa_etaria:crmFaixa(c),professor:crmTeacherName(c.teacher),dias:crmDays(c.days),horario:per,vagas_ocupadas:activeStudents(c).length};});}
 function crmPreview(){return crmRows().map(r=>`${r.periodo||'—'} · ${r.nome_turma} · ${r.faixa_etaria} · ${r.professor} · ${r.dias}`).join('\n');}
 async function crmExport(){
  if(!CRM_CFG.url){toast('⚠️ CRM endpoint not set yet');return;}
