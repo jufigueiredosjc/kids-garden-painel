@@ -1787,7 +1787,7 @@ function coordStructure(){
    <div class="tbl-wrap"><table><tr><th>Teacher</th><th>Classes</th><th></th></tr>
    ${allTeacherNames().map(t=>{const ids=teacherClassIds(t);const te=esc(t).replace(/'/g,"\\'");return `<tr><td><b>${esc(t)}</b></td><td>${ids.length?teacherClassList(t).map(c=>esc(c.name)).join(', '):'<span class="muted small">none (left?)</span>'}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="renameTeacherModal('${te}')">✏️ Rename everywhere</button> ${ids.length?'<button class="btn ghost sm" disabled title="Reassign their classes first">🗑 Remove</button>':`<button class="btn ghost sm" onclick="removeTeacher('${te}')">🗑 Remove</button>`}</td></tr>`;}).join('')}
    </table></div></div>
-  <div class="card"><h3>🔗 CRM — turmas (comercial)</h3>
+  <div class="card"><h3>🔗 CRM (export on every new update for the commercial team)</h3>
    <p class="hint">Sends the <b>regular class structure</b> (period · class · age · teacher first-name · days) to the commercial CRM's Google Sheet, so the sales team always sees the up-to-date class days. <b>Never</b> sends children's names or the vagas — those stay in the CRM.</p>
    <div class="flag ok"><span class="fi">${CRM_CFG.url?'✅':'⏳'}</span><div>${CRM_CFG.url?('Connected — '+crmRows().length+' classes will be sent. Cambridge Prep &amp; Fluent Steps are excluded; children &amp; vagas are never sent.'):'Waiting for the Web App URL + secret to activate the button below.'}</div></div>
    <button class="btn orange" style="margin-top:10px" ${CRM_CFG.url?'':'disabled'} onclick="crmExport()">📤 Export classes → CRM</button></div>`;
