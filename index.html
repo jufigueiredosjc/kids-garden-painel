@@ -1753,7 +1753,7 @@ let COORD_OK=false,COORD_TAB='overview',COORD_ACT_POPPED=false;
    Sends ONLY: periodo, nome_turma, faixa_etaria, professor (1st name), dias, horario.
    NEVER sends children's names or the vagas (those are managed only in the CRM).
    Cambridge Prep + Fluent Steps are excluded; Teens B1/B2 and Pietro are included. */
-const CRM_CFG={url:"https://script.google.com/macros/s/AKfycbyQWitiEZB0SOcD0--laTQVcxFnS72VPgWhE8sSVIAsD-3idqMZfRGYLA6Ig5nkPa8V/exec",token:"kidsgarden@309"};
+const CRM_CFG={url:"https://script.google.com/macros/s/AKfycbxXAw9idTOqS72iW4BkKm_nojMtMRiy4MfwKUWbIImleKYbUnxdWCLIjpnO77ps3yp0/exec",token:"kidsgarden@309"};
 function crmTeacherName(t){t=String(t||'').trim();var had=/^(Mr|Mrs|Ms|Miss)\.?\s+/i.test(t);var s=t.replace(/^(Mr|Mrs|Ms|Miss)\.?\s+/i,'').trim();var out;if(/^Ana\s+Luiza/i.test(s))out='Ana Luiza';else if(!had)out=s;else out=s.split(/\s+/)[0]||s;if(/^Caue$/i.test(out))out='Cauê';return out;}
 function crmPeriodo(t){t=String(t||'').toUpperCase();if(t.indexOf('AM')>=0)return 'Manhã';if(t.indexOf('PM')>=0)return 'Tarde';return '';}
 function crmDays(d){d=String(d||'');var M={Mon:'Segunda',Tue:'Terça',Wed:'Quarta',Thu:'Quinta',Fri:'Sexta'};var m=d.match(/(Mon|Tue|Wed|Thu|Fri)\s*&\s*(Mon|Tue|Wed|Thu|Fri)/);if(m)return M[m[1]]+' e '+M[m[2]];if(/mondays?\s*only/i.test(d))return 'Segunda';return d.replace(/Mon/g,'Segunda').replace(/Tue/g,'Terça').replace(/Wed/g,'Quarta').replace(/Thu/g,'Quinta').replace(/Fri/g,'Sexta');}
