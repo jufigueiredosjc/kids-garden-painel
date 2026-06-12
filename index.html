@@ -722,7 +722,11 @@ function saveDollar(cid,name){const nv=Number($("#dol_new").value);if(isNaN(nv)|
  STATE.dollarAdjNote=STATE.dollarAdjNote||{};STATE.dollarAdjNote[cid+'::'+name]={note:note,total:nv,ts:new Date().toISOString(),by:CURRENT_EMAIL||''};
  save();const m=document.getElementById('dolmodal');if(m)m.remove();toast("✅ Kid's Dollars updated — reason saved");render();}
 function dismissKd(id){try{KD_DISMISSED.add(id);}catch(e){}render();}
-const countedStudents=()=>CLASSES.filter(c=>c.count).reduce((a,c)=>a+c.students.length,0);
+const countedStudents=()=>CLASSES.filter(c=>c.count).reduce((a,c)=>a+activeStudents(c).length,0);
+/* a real, saved report = has student attendance/observation OR a class-level note (highlights/improve/theme).
+   Excludes blank placeholders. Deleted reports are already removed by the tombstone system. */
+function isRealReport(s){if(!s)return false;if((s.high&&String(s.high).trim())||(s.improve&&String(s.improve).trim())||(s.theme&&String(s.theme).trim()))return true;var r=s.rows||{};return Object.keys(r).some(function(n){var v=r[n]||{};return (v.att==='Present'||v.att==='Late'||v.att==='Absent')||(v.obs&&String(v.obs).trim())||(v.hw&&v.hw!=='')||(Number(v.dollar)>0);});}
+function loggedReports(id){return sessionsOf(id).filter(isRealReport).length;}
 
 /* ============================================================ ROUTER ============================================================ */
 let VIEW={name:'home'};
@@ -2105,7 +2109,7 @@ function coordReportsPending(){let rows='';CLASSES.forEach(c=>{if(c.fluent)retur
 }
 function coordOverview(b){
  const data=CLASSES.map(c=>({c,s:classStats(c.id),att:attentionList(c.id).length,od:isOverdue(c),kd:c.kidDollar?kdCheck(c.id):null}));
- const totReports=data.reduce((a,d)=>a+d.s.sessions,0);
+ const totReports=data.reduce((a,d)=>a+loggedReports(d.c.id),0);
  const overdueCount=data.filter(d=>d.od.tracked&&(d.od.overdue||d.s.sessions===0)).length;
  const watch=data.reduce((a,d)=>a+d.att,0);
  b.innerHTML=`
