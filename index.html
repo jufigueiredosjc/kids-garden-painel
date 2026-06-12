@@ -457,7 +457,7 @@ const SEED_SKILLS={};
 const CLASS_BASE=JSON.parse(JSON.stringify(CLASSES));
 let STATE=load();
 try{applyClassMeta();}catch(e){}
-function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],tombstones:{}};}
+function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],trials:{},tombstones:{}};}
 function load(){
  let s=null;
  try{const r=localStorage.getItem(LS_KEY);if(r)s=JSON.parse(r);}catch(e){}
@@ -513,7 +513,7 @@ function applyTombstones(m){var T=m&&m.tombstones;if(!T)return m;var any=false,k
 function mergeStatesForSave(base,loc){var m={},k;for(k in base)m[k]=base[k];for(k in loc)if(!(k in m))m[k]=loc[k];
  m.sessions=_mSessions(base.sessions||{},loc.sessions||{});m.addedStudents=_mAdded(base.addedStudents||{},loc.addedStudents||{});
  m.customClasses=_mById(base.customClasses||[],loc.customClasses||[]);m.teacherTasks=_mById(base.teacherTasks||[],loc.teacherTasks||[]);m.taskLog=_mById(base.taskLog||[],loc.taskLog||[]);m.patches=_mUniq(base.patches||[],loc.patches||[]);
- ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
+ ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
  m.tombstones=_mObj(base.tombstones||{},loc.tombstones||{});
  return applyTombstones(m);}
 async function cloudSave(){if(!sbClient)return;try{
@@ -860,6 +860,7 @@ function renderClass(id){
  tabs.push(['skills','🎯 Skills & Competencies']);
  if(hasTests(c))tabs.push(['tests',(c.mock?'🧪 Mock Tests':'🧪 Unit Tests')]);
  tabs.push(['history','📖 Edit Reports']);
+ if(trialsForClass(id).length)tabs.push(['trial','🎒 Trial Class']);
  if(!tabs.some(t=>t[0]===CLASS_TAB))CLASS_TAB='overview';
  app().innerHTML=`
   <div class="page-head"><button class="back" onclick="go('home')">← Classes</button>
@@ -868,6 +869,7 @@ function renderClass(id){
   <div class="tabs">${tabs.map(t=>`<button class="tab ${CLASS_TAB===t[0]?'active':''}" onclick="setTab('${t[0]}','${id}')">${t[1]}</button>`).join('')}</div>
   ${classMsgBanner(id)}
   ${classTaskBanner(id)}
+  ${classTrialBanner(id)}
   <div id="tabbody"></div>`;
  const b=$("#tabbody");
  if(CLASS_TAB==='overview')b.innerHTML=tabOverview(id);
@@ -875,6 +877,7 @@ function renderClass(id){
  else if(CLASS_TAB==='skills')b.innerHTML=tabSkills(id);
  else if(CLASS_TAB==='tests')b.innerHTML=tabTests(id);
  else if(CLASS_TAB==='history')b.innerHTML=tabEditHistory(id);
+ else if(CLASS_TAB==='trial')b.innerHTML=tabTrial(id);
  const od=isOverdue(c);
  if(od.tracked&&od.overdue&&ALERTED!==id){ALERTED=id;setTimeout(()=>showOverdueModal(c,od),120);}
  if(!(od.tracked&&od.overdue)&&LAST_CLASS_ENTERED!==id&&pendingCountForClass(id)>0){setTimeout(()=>showTaskPopup(id),220);}
@@ -1775,6 +1778,121 @@ async function crmExport(){
   else toast('📤 Sent — please confirm in the CRM sheet');
  }catch(err){toast('📤 Sent to the CRM (no read-back): '+(err&&err.message||err));}
 }
+/* ===== TRIAL CLASSES (experimental lessons) — read from the CRM sheet, manage in Coordination + class cards.
+   Everything is shown in English; Portuguese is auto-translated (Google Translate, browser-side, no key).
+   Read-only on every child history; trial data lives in its own isolated STATE.trials. ===== */
+const CRM_TRIALS_URL="https://script.google.com/macros/s/AKfycbxr1ocQ2zn_sJwKk4PHOZ1MYTwaTeuVpNkwBJTm9D7lDcyV7mFVkaifCk6ksLS-mqo/exec";
+const TRANS_CACHE={};
+let TRIALS_LOADED=false,TRIALS_LOADING=false,TRIAL_DISMISSED=new Set();
+function gTranslate(text){text=String(text||'').trim();if(!text)return Promise.resolve('');if(TRANS_CACHE[text]!==undefined)return Promise.resolve(TRANS_CACHE[text]);
+ return fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=pt&tl=en&dt=t&q='+encodeURIComponent(text)).then(r=>r.json()).then(j=>{let o='';try{(j[0]||[]).forEach(s=>{if(s&&s[0])o+=s[0];});}catch(e){}o=o||text;TRANS_CACHE[text]=o;return o;}).catch(()=>text);}
+function ensureTrials(){STATE.trials=STATE.trials||{};return STATE.trials;}
+function trialKey(t){return 't|'+(t.registrado_em||t.data||'')+'|'+(t.crianca||'');}
+function newTrialId(){return 'tr_'+Math.random().toString(36).slice(2,9);}
+function trialById(id){ensureTrials();for(const k in STATE.trials){if(STATE.trials[k].id===id)return STATE.trials[k];}return null;}
+function allTrials(){ensureTrials();return Object.keys(STATE.trials).map(k=>STATE.trials[k]).filter(m=>m.snap&&!m.hidden);}
+function trialsForClass(id){return allTrials().filter(m=>m.classId===id&&(m.status==='assigned'||m.status==='ack'));}
+function newTrialsCount(){return allTrials().filter(m=>m.status==='new').length;}
+function trialChild(s){return String((s&&s.crianca)||'').trim()||'(no name)';}
+function trialAge(s){return String((s&&s.idade)||'').replace(/\s*anos?\b/i,' years old').trim();}
+function trialDate(s){try{var d=new Date(s.data);if(isNaN(d))return String(s.data||'');return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:'UTC'});}catch(e){return String(s.data||'');}}
+function trialTime(s){var h=String((s&&s.horario)||'');var m=h.match(/T(\d{2}):(\d{2})/);if(!m)return h;var H=+m[1],M=m[2],ap=H>=12?'PM':'AM',h12=((H+11)%12)+1;return h12+':'+M+' '+ap;}
+async function loadTrials(){
+ if(TRIALS_LOADING)return;TRIALS_LOADING=true;
+ try{const r=await fetch(CRM_TRIALS_URL);const j=await r.json();const aulas=(j&&j.aulas)||[];ensureTrials();
+  for(const t of aulas){const k=trialKey(t);let m=STATE.trials[k];if(!m){m=STATE.trials[k]={status:'new',ts:Date.now(),id:newTrialId()};}if(!m.id)m.id=newTrialId();m.snap=t;if(m.comment_en===undefined)m.comment_en=await gTranslate(t.comentario);}
+  TRIALS_LOADED=true;
+ }catch(e){TRIALS_LOADED=true;}
+ TRIALS_LOADING=false;try{render();}catch(e){}
+}
+function refreshTrials(){TRIALS_LOADED=false;TRIALS_LOADING=false;toast('🔄 Checking the commercial sheet…');loadTrials();}
+/* ---- Coordination: Trial Classes tab ---- */
+function coordTrials(){
+ if(!TRIALS_LOADED&&!TRIALS_LOADING)loadTrials();
+ const trials=allTrials().sort((a,b)=>new Date(a.snap.data||0)-new Date(b.snap.data||0));
+ const guide=`<div class="card" style="border-color:var(--purple);background:linear-gradient(120deg,#F6EEFB,#FCF8FF)">
+   <h3 style="color:var(--purple)">🎯 Sales-manager guidance</h3>
+   <p class="hint">A trial class is your warmest lead — the family is already at the door. Run each one like a mini sales cycle:</p>
+   <ul class="small" style="margin:6px 0 0 18px;line-height:1.7">
+    <li><b>Assign well:</b> place the child in the class that best fits their age and energy, and brief the teacher (greet the family by name, prepare one "wow" moment, mind the timing).</li>
+    <li><b>During the class:</b> the teacher captures how the child did — engagement, comfort, a memorable highlight to share with the family.</li>
+    <li><b>Close within 24h:</b> while the experience is fresh, use the teacher's note to personalise the message and hand it to the front desk (atendimento) to invite enrolment.</li>
+   </ul></div>`;
+ const head=`<div class="card"><h3 style="color:var(--purple)">🎒 Trial Classes <button class="btn ghost sm" style="float:right" onclick="refreshTrials()">🔄 Refresh</button></h3>
+   <p class="hint">Experimental lessons scheduled by the commercial team. Assign each to a class, brief the teacher and follow the cycle through to enrolment. Shown in English — Portuguese is translated automatically.</p>
+   ${TRIALS_LOADING?'<p class="muted small">Loading from the sheet…</p>':''}</div>`;
+ const body=trials.length?trials.map(trialCoordCard).join(''):(TRIALS_LOADING?'':'<div class="card"><p class="muted">No trial classes scheduled right now.</p></div>');
+ return guide+head+body;
+}
+function trialCoordCard(m){const s=m.snap||{};const id=m.id;const assigned=m.classId?getClass(m.classId):null;
+ const clsOpts='<option value="">— pick a class —</option>'+sortedClasses().filter(c=>!c.fluent&&c.special!=='cambridge').map(c=>`<option value="${c.id}" ${m.classId===c.id?'selected':''}>${esc(c.name)} · ${esc(c.time)} — ${esc(c.teacher)}</option>`).join('');
+ const badge={new:'<span class="badge b-late">New</span>',assigned:'<span class="badge b-na">Sent to teacher</span>',ack:'<span class="badge b-present">Teacher ready</span>',done:'<span class="badge">Closed</span>'}[m.status]||'';
+ return `<div class="card" style="border-color:var(--purple)">
+   <h3 style="color:var(--purple)">🎒 ${esc(trialChild(s))} ${badge}</h3>
+   <div class="sub">🎂 ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))} · 👨‍👩‍👧 Guardian: ${esc(s.responsavel||'—')}</div>
+   ${s.comentario?`<div class="flag ok" style="margin-top:8px"><span class="fi">💬</span><div><b>Office comment:</b> ${esc(m.comment_en||s.comentario)}${m.comment_en&&m.comment_en!==s.comentario?' <span class="muted small">(auto-translated)</span>':''}</div></div>`:''}
+   <div class="row c2" style="margin-top:10px"><div><label class="fl">Assign to class (defines the teacher)</label><select class="inp" id="trcls_${id}">${clsOpts}</select></div>
+     <div><label class="fl">Suggested by CRM</label><input class="inp" value="${esc(s.professor||'—')}" disabled></div></div>
+   <label class="fl" style="margin-top:8px;display:block"><input type="checkbox" id="trinc_${id}" ${m.includeOffice?'checked':''}> Forward the office comment to the teacher</label>
+   <label class="fl" style="margin-top:8px">Extra notes for the teacher <span class="muted small">(print the activity, watch the time… — auto-translated to English)</span></label>
+   <textarea class="inp" id="trnote_${id}" rows="2" placeholder="e.g. Imprimir atividade extra; atenção ao horário da aula">${esc(m.coordNote_src||'')}</textarea>
+   <div style="margin-top:10px"><button class="btn" style="background:var(--purple);border-color:var(--purple)" onclick="assignTrial('${id}')">📨 ${m.status==='new'?'Assign &amp; notify teacher':'Update &amp; notify'}</button>
+     ${m.classId&&assigned?`<span class="muted small"> → assigned to <b>${esc(assigned.name)} · ${esc(assigned.time)}</b></span>`:''}</div>
+   ${m.status!=='new'?trialCoordFollow(m):''}
+   <div style="margin-top:10px;border-top:1px solid #eee;padding-top:8px">
+     <button class="btn ghost sm" onclick="trialObs('${id}')">📝 Observation</button>
+     <button class="btn ghost sm" onclick="trialAddTask('${id}')">➕ Assign a task</button>
+     ${m.status!=='done'?`<button class="btn ghost sm" onclick="trialDone('${id}')">✅ Close cycle</button>`:`<button class="btn ghost sm" onclick="trialReopen('${id}')">↩ Reopen</button>`}
+     <button class="btn ghost sm" style="color:var(--bad)" onclick="trialDelete('${id}')">🗑 Delete</button></div>
+ </div>`;
+}
+function trialCoordFollow(m){let h='';
+ if(m.status==='ack')h+=`<div class="flag ok" style="margin-top:8px"><span class="fi">✅</span><div>Teacher confirmed: <b>Understood, preparing for the trial</b>.</div></div>`;
+ if(m.teacherComment)h+=`<div class="flag warn" style="margin-top:8px"><span class="fi">🗒️</span><div><b>Teacher's note on the trial day:</b> ${esc(m.teacherComment_en||m.teacherComment)}</div></div>`;
+ if(m.observation)h+=`<div class="small" style="margin-top:6px">📝 <b>Observation:</b> ${esc(m.observation)}</div>`;
+ if(m.tasks&&m.tasks.length)h+=`<div class="small" style="margin-top:6px">📌 <b>Tasks:</b> ${m.tasks.map(esc).join(' · ')}</div>`;
+ return h;
+}
+function assignTrial(id){const m=trialById(id);if(!m)return;const sel=$('#trcls_'+id);const cid=sel?sel.value:'';if(!cid){toast('Pick a class first');return;}
+ m.classId=cid;const inc=$('#trinc_'+id);m.includeOffice=inc?!!inc.checked:false;const noteEl=$('#trnote_'+id);const note=noteEl?String(noteEl.value).trim():'';
+ if(m.status==='new'||m.status==='assigned')m.status='assigned';m.ts=Date.now();TRIAL_DISMISSED.delete(m.id);
+ const fin=()=>{save();toast('📨 Sent to the teacher');renderCoord();};
+ if(note){m.coordNote_src=note;gTranslate(note).then(en=>{m.coordNote=en;fin();});}else{m.coordNote='';m.coordNote_src='';fin();}
+}
+function trialObs(id){const m=trialById(id);if(!m)return;const v=prompt('Observation (coordination — internal):',m.observation||'');if(v===null)return;m.observation=String(v).trim();save();renderCoord();}
+function trialAddTask(id){const m=trialById(id);if(!m)return;const v=prompt('New task for this trial:','');if(!v||!String(v).trim())return;m.tasks=m.tasks||[];m.tasks.push(String(v).trim());save();toast('📌 Task added');renderCoord();}
+function trialDone(id){const m=trialById(id);if(!m)return;m.status='done';m.ts=Date.now();save();toast('✅ Cycle closed');renderCoord();}
+function trialReopen(id){const m=trialById(id);if(!m)return;m.status=m.classId?'assigned':'new';m.ts=Date.now();save();renderCoord();}
+function trialDelete(id){const m=trialById(id);if(!m)return;if(!confirm('Remove this trial class from the panel? (it stays in the commercial sheet — this only hides it here.)'))return;m.hidden=true;m.ts=Date.now();save();toast('🗑 Removed from the panel');renderCoord();}
+/* ---- Teacher side: class-card Trial Class tab + banner ---- */
+function classTrialBanner(id){const trials=trialsForClass(id).filter(m=>m.status==='assigned'&&!TRIAL_DISMISSED.has(m.id));if(!trials.length)return '';
+ return trials.map(m=>{const s=m.snap||{};return `<div class="card" style="border-color:var(--purple);background:linear-gradient(120deg,#F6EEFB,#FCF8FF)">
+   <h3 style="color:var(--purple)">🎒 New Trial Class assigned to you!</h3>
+   <p><b>${esc(trialChild(s))}</b> · ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))}</p>
+   ${m.includeOffice&&s.comentario?`<p class="small">💬 ${esc(m.comment_en||s.comentario)}</p>`:''}
+   ${m.coordNote?`<p class="small">📌 ${esc(m.coordNote)}</p>`:''}
+   <div class="no-print"><button class="btn" style="background:var(--purple);border-color:var(--purple)" onclick="trialAck('${m.id}','${id}')">👍 Understood, I'll prepare</button>
+   <button class="btn ghost" onclick="trialDismissBanner('${m.id}','${id}')">Dismiss</button>
+   <button class="btn ghost" onclick="setTab('trial','${id}')">Open Trial Class</button></div></div>`;}).join('');
+}
+function trialDismissBanner(mid,cid){TRIAL_DISMISSED.add(mid);renderClass(cid);}
+function tabTrial(id){const trials=trialsForClass(id);if(!trials.length)return '<div class="card"><p class="muted">No trial class for this group right now.</p></div>';
+ return trials.map(m=>{const s=m.snap||{};const ackd=m.status==='ack';return `<div class="card" style="border-color:var(--purple)">
+   <h3 style="color:var(--purple)">🎒 Trial Class — ${esc(trialChild(s))}</h3>
+   <div class="sub">🎂 ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))}</div>
+   ${m.includeOffice&&s.comentario?`<div class="flag ok" style="margin-top:8px"><span class="fi">💬</span><div><b>From the office:</b> ${esc(m.comment_en||s.comentario)}</div></div>`:''}
+   ${m.coordNote?`<div class="flag warn" style="margin-top:8px"><span class="fi">📌</span><div><b>Coordination notes:</b> ${esc(m.coordNote)}</div></div>`:''}
+   ${ackd?`<div class="flag ok" style="margin-top:8px"><span class="fi">✅</span><div>You confirmed you'll prepare for this trial. 🎉</div></div>`:`<div style="margin-top:10px" class="no-print"><button class="btn" style="background:var(--purple);border-color:var(--purple)" onclick="trialAck('${m.id}','${id}')">👍 Understood, I'll prepare</button> <button class="btn ghost" onclick="trialDismissBanner('${m.id}','${id}')">Dismiss</button></div>`}
+   <label class="fl" style="margin-top:12px">Your note on the trial day <span class="muted small">(how the child did — coordination follows up with the family)</span></label>
+   <textarea class="inp" id="trtc_${m.id}" rows="3" placeholder="e.g. The child engaged really well and loved the songs; a little shy at first but warmed up.">${esc(m.teacherComment_src||m.teacherComment||'')}</textarea>
+   <button class="btn sm" style="margin-top:6px" onclick="trialTeacherComment('${m.id}','${id}')">💾 Save note</button>
+ </div>`;}).join('');
+}
+function trialAck(mid,cid){const m=trialById(mid);if(!m)return;m.status='ack';m.ts=Date.now();save();toast('✅ All set — you are ready for the trial');renderClass(cid);}
+function trialTeacherComment(mid,cid){const m=trialById(mid);if(!m)return;const el=$('#trtc_'+mid);const v=el?String(el.value).trim():'';m.teacherComment_src=v;
+ const fin=()=>{save();toast('💾 Note saved');renderClass(cid);};
+ if(v){gTranslate(v).then(en=>{m.teacherComment_en=en;m.teacherComment=v;fin();});}else{m.teacherComment=v;m.teacherComment_en='';fin();}
+}
 function coordStructure(){
  const rows=CLASSES.map(c=>{const L=LEVELS[c.level]||{};const custom=(STATE.customClasses||[]).some(x=>x.id===c.id);
   return `<tr><td><b>${esc(c.name)}</b> <span class="muted small">${esc(c.time||'')}</span>${custom?' <span class="badge b-na">added</span>':''}</td>
@@ -2018,7 +2136,8 @@ function renderCoordGate(){
 function tryPwd(){const el=$("#pwd");const val=el?String(el.value).trim():'';if(val===COORD_PWD){COORD_OK=true;COORD_TAB='overview';toast("✅ Welcome, Coordination");renderCoord();}else toast("❌ Wrong password");}
 function renderCoord(){
  const totalPend=CLASSES.reduce((a,c)=>a+pendingFor(c.id,'coord').length,0);
- const bt=birthdaysToday().length;const fc=coordPendingActions().length;const tabs=[['overview','📊 Class Performance'],['teachers','⏰ Teacher Compliance'],['attention','🔎 Children to Watch'],['follow','🚦 Follow-ups'+(fc?` (${fc})`:'')],['reports','📄 Progress Reports'],['messages','✉️ Messages'+(totalPend?` (${totalPend})`:'')],['birthdays','👧 Students/Birthdays'+(bt?` (${bt})`:'')],['structure','🏗 Structural Organization']];
+ if(!TRIALS_LOADED&&!TRIALS_LOADING)loadTrials();
+ const bt=birthdaysToday().length;const fc=coordPendingActions().length;const nt=newTrialsCount();const tabs=[['overview','📊 Class Performance'],['teachers','⏰ Teacher Compliance'],['attention','🔎 Children to Watch'],['follow','🚦 Follow-ups'+(fc?` (${fc})`:'')],['reports','📄 Progress Reports'],['messages','✉️ Messages'+(totalPend?` (${totalPend})`:'')],['birthdays','👧 Students/Birthdays'+(bt?` (${bt})`:'')],['trials','🎒 Trial Classes'+(nt?` (${nt})`:'')],['structure','🏗 Structural Organization']];
  app().innerHTML=`<div class="page-head"><button class="back" onclick="go('home')">← Home</button>
    <div><h2>🧭 Coordination Dashboard</h2><div class="sub">Full pedagogical oversight · ${CLASSES.filter(c=>c.count).length} classes · ${countedStudents()} students</div></div></div>
   <div class="tabs">${tabs.map(t=>`<button class="tab ${COORD_TAB===t[0]?'active':''}" onclick="setCoordTab('${t[0]}')">${t[1]}</button>`).join('')}</div>
@@ -2033,6 +2152,7 @@ function renderCoord(){
  else if(COORD_TAB==='reports'){b.innerHTML=coordReports();if(!RPT.cid)fillRptStudents();}
  else if(COORD_TAB==='messages')b.innerHTML=coordMessages();
  else if(COORD_TAB==='birthdays')b.innerHTML=coordBirthdays();
+ else if(COORD_TAB==='trials')b.innerHTML=coordTrials();
  else if(COORD_TAB==='structure')b.innerHTML=coordStructure();
  if(!COORD_ACT_POPPED){COORD_ACT_POPPED=true;setTimeout(function(){try{showCoordActionsPopup();}catch(e){}},80);}
 }
