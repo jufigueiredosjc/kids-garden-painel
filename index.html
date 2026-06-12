@@ -1800,7 +1800,7 @@ function trialTime(s){var h=String((s&&s.horario)||'');var m=h.match(/T(\d{2}):(
 async function loadTrials(){
  if(TRIALS_LOADING)return;TRIALS_LOADING=true;
  try{const r=await fetch(CRM_TRIALS_URL);const j=await r.json();const aulas=(j&&j.aulas)||[];ensureTrials();
-  for(const t of aulas){const k=trialKey(t);let m=STATE.trials[k];if(!m){m=STATE.trials[k]={status:'new',ts:Date.now(),id:newTrialId()};}if(!m.id)m.id=newTrialId();m.snap=t;if(m.comment_en===undefined)m.comment_en=await gTranslate(t.comentario);}
+  for(const t of aulas){const k=trialKey(t);let m=STATE.trials[k];if(!m){m=STATE.trials[k]={status:'new',ts:Date.now(),id:newTrialId()};}if(!m.id)m.id=newTrialId();m.snap=t;}
   TRIALS_LOADED=true;
  }catch(e){TRIALS_LOADED=true;}
  TRIALS_LOADING=false;try{render();}catch(e){}
@@ -1817,7 +1817,7 @@ async function pollTrials(){
  try{if(document.hidden)return;}catch(e){}
  TRIALS_LOADING=true;let added=0;
  try{const r=await fetch(CRM_TRIALS_URL);const j=await r.json();const aulas=(j&&j.aulas)||[];ensureTrials();
-  for(const t of aulas){const k=trialKey(t);let m=STATE.trials[k];if(!m){m=STATE.trials[k]={status:'new',ts:Date.now(),id:newTrialId()};m.snap=t;m.comment_en=await gTranslate(t.comentario);added++;}else{m.snap=t;}}
+  for(const t of aulas){const k=trialKey(t);let m=STATE.trials[k];if(!m){m=STATE.trials[k]={status:'new',ts:Date.now(),id:newTrialId()};m.snap=t;added++;}else{m.snap=t;}}
  }catch(e){}
  TRIALS_LOADING=false;
  if(added>0){let typing=false;try{const ae=document.activeElement;typing=ae&&/^(TEXTAREA|INPUT|SELECT)$/.test(ae.tagName);}catch(e){}
@@ -1854,7 +1854,7 @@ function coordTrials(){
     <li><b>During the class:</b> the teacher captures how the child did — engagement, comfort, a memorable highlight to share with the family.</li>
     <li><b>Close within 24h:</b> while the experience is fresh, use the teacher's note to personalise the message and hand it to the front desk (atendimento) to invite enrolment.</li>
    </ul></div>`;
- const head=`<div class="card"><h3 style="color:var(--purple)">🎒 Trial Classes <button class="btn ghost sm" style="float:right" onclick="refreshTrials()">🔄 Refresh</button></h3>
+ const head=`<div class="card"><h3 style="color:var(--purple)">🎒 Trial Classes</h3>
    <p class="hint">Experimental lessons scheduled by the commercial team. Assign each to a class, brief the teacher and follow the cycle through to enrolment. Shown in English — Portuguese is translated automatically.</p>
    ${TRIALS_LOADING?'<p class="muted small">Loading from the sheet…</p>':''}</div>`;
  const body=trials.length?trials.map(trialCoordCard).join(''):(TRIALS_LOADING?'':'<div class="card"><p class="muted">No trial classes scheduled right now.</p></div>');
@@ -1865,13 +1865,13 @@ function trialCoordCard(m){const s=m.snap||{};const id=m.id;const assigned=m.cla
  const badge={new:'<span class="badge b-late">New</span>',assigned:'<span class="badge b-na">Sent to teacher</span>',ack:'<span class="badge b-present">Teacher ready</span>',done:'<span class="badge">Closed</span>'}[m.status]||'';
  return `<div class="card" style="border-color:var(--purple)">
    <h3 style="color:var(--purple)">🎒 ${esc(trialChild(s))} ${badge}</h3>
-   <div class="sub">🎂 ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))} · 👨‍👩‍👧 Guardian: ${esc(s.responsavel||'—')}</div>
-   ${s.comentario?`<div class="flag ok" style="margin-top:8px"><span class="fi">💬</span><div><b>Office comment:</b> ${esc(m.comment_en||s.comentario)}${m.comment_en&&m.comment_en!==s.comentario?' <span class="muted small">(auto-translated)</span>':''}</div></div>`:''}
+   <div class="sub">🎂 ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))} · 👩‍🏫 Teacher: ${esc(s.responsavel||'—')}</div>
+   ${s.comentario?`<div class="flag ok" style="margin-top:8px"><span class="fi">💬</span><div><b>Office comment:</b> ${esc(s.comentario)}</div></div>`:''}
    <div class="row c2" style="margin-top:10px"><div><label class="fl">Assign to class (defines the teacher)</label><select class="inp" id="trcls_${id}">${clsOpts}</select></div>
      <div><label class="fl">Suggested by CRM</label><input class="inp" value="${esc(s.professor||'—')}" disabled></div></div>
    <label class="fl" style="margin-top:8px;display:block"><input type="checkbox" id="trinc_${id}" ${m.includeOffice?'checked':''}> Forward the office comment to the teacher</label>
-   <label class="fl" style="margin-top:8px">Extra notes for the teacher <span class="muted small">(print the activity, watch the time… — auto-translated to English)</span></label>
-   <textarea class="inp" id="trnote_${id}" rows="2" placeholder="e.g. Imprimir atividade extra; atenção ao horário da aula">${esc(m.coordNote_src||'')}</textarea>
+   <label class="fl" style="margin-top:8px">Extra notes for the teacher <span class="muted small">(print the activity, watch the time…)</span></label>
+   <textarea class="inp" id="trnote_${id}" rows="2" placeholder="e.g. Print the extra activity; mind the class time">${esc(m.coordNote_src||'')}</textarea>
    <div style="margin-top:10px"><button class="btn" style="background:var(--purple);border-color:var(--purple)" onclick="assignTrial('${id}')">📨 ${m.status==='new'?'Assign &amp; notify teacher':'Update &amp; notify'}</button>
      ${m.classId&&assigned?`<span class="muted small"> → assigned to <b>${esc(assigned.name)} · ${esc(assigned.time)}</b></span>`:''}</div>
    ${m.status!=='new'?trialCoordFollow(m):''}
@@ -1893,7 +1893,7 @@ function assignTrial(id){const m=trialById(id);if(!m)return;const sel=$('#trcls_
  m.classId=cid;const inc=$('#trinc_'+id);m.includeOffice=inc?!!inc.checked:false;const noteEl=$('#trnote_'+id);const note=noteEl?String(noteEl.value).trim():'';
  if(m.status==='new'||m.status==='assigned')m.status='assigned';m.ts=Date.now();TRIAL_DISMISSED.delete(m.id);
  const fin=()=>{save();toast('📨 Sent to the teacher');renderCoord();};
- if(note){m.coordNote_src=note;gTranslate(note).then(en=>{m.coordNote=en;fin();});}else{m.coordNote='';m.coordNote_src='';fin();}
+ if(note){m.coordNote_src=note;m.coordNote=note;}else{m.coordNote='';m.coordNote_src='';}fin();
 }
 function trialObs(id){const m=trialById(id);if(!m)return;const v=prompt('Observation (coordination — internal):',m.observation||'');if(v===null)return;m.observation=String(v).trim();save();renderCoord();}
 function trialAddTask(id){const m=trialById(id);if(!m)return;const v=prompt('New task for this trial:','');if(!v||!String(v).trim())return;m.tasks=m.tasks||[];m.tasks.push(String(v).trim());save();toast('📌 Task added');renderCoord();}
@@ -1905,7 +1905,7 @@ function classTrialBanner(id){const trials=trialsForClass(id).filter(m=>m.status
  return trials.map(m=>{const s=m.snap||{};return `<div class="card" style="border-color:var(--purple);background:linear-gradient(120deg,#F6EEFB,#FCF8FF)">
    <h3 style="color:var(--purple)">🎒 New Trial Class assigned to you!</h3>
    <p><b>${esc(trialChild(s))}</b> · ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))}</p>
-   ${m.includeOffice&&s.comentario?`<p class="small">💬 ${esc(m.comment_en||s.comentario)}</p>`:''}
+   ${m.includeOffice&&s.comentario?`<p class="small">💬 ${esc(s.comentario)}</p>`:''}
    ${m.coordNote?`<p class="small">📌 ${esc(m.coordNote)}</p>`:''}
    <div class="no-print"><button class="btn" style="background:var(--purple);border-color:var(--purple)" onclick="trialAck('${m.id}','${id}')">👍 Understood, I'll prepare</button>
    <button class="btn ghost" onclick="trialDismissBanner('${m.id}','${id}')">Dismiss</button>
@@ -1916,7 +1916,7 @@ function tabTrial(id){const trials=trialsForClass(id);if(!trials.length)return '
  return trials.map(m=>{const s=m.snap||{};const ackd=m.status==='ack';return `<div class="card" style="border-color:var(--purple)">
    <h3 style="color:var(--purple)">🎒 Trial Class — ${esc(trialChild(s))}</h3>
    <div class="sub">🎂 ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))}</div>
-   ${m.includeOffice&&s.comentario?`<div class="flag ok" style="margin-top:8px"><span class="fi">💬</span><div><b>From the office:</b> ${esc(m.comment_en||s.comentario)}</div></div>`:''}
+   ${m.includeOffice&&s.comentario?`<div class="flag ok" style="margin-top:8px"><span class="fi">💬</span><div><b>From the office:</b> ${esc(s.comentario)}</div></div>`:''}
    ${m.coordNote?`<div class="flag warn" style="margin-top:8px"><span class="fi">📌</span><div><b>Coordination notes:</b> ${esc(m.coordNote)}</div></div>`:''}
    ${ackd?`<div class="flag ok" style="margin-top:8px"><span class="fi">✅</span><div>You confirmed you'll prepare for this trial. 🎉</div></div>`:`<div style="margin-top:10px" class="no-print"><button class="btn" style="background:var(--purple);border-color:var(--purple)" onclick="trialAck('${m.id}','${id}')">👍 Understood, I'll prepare</button> <button class="btn ghost" onclick="trialDismissBanner('${m.id}','${id}')">Dismiss</button></div>`}
    <label class="fl" style="margin-top:12px">Your note on the trial day <span class="muted small">(how the child did — coordination follows up with the family)</span></label>
