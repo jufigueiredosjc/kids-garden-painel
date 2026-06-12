@@ -881,6 +881,7 @@ function renderClass(id){
  const od=isOverdue(c);
  if(od.tracked&&od.overdue&&ALERTED!==id){ALERTED=id;setTimeout(()=>showOverdueModal(c,od),120);}
  if(!(od.tracked&&od.overdue)&&LAST_CLASS_ENTERED!==id&&pendingCountForClass(id)>0){setTimeout(()=>showTaskPopup(id),220);}
+ if(trialsForClass(id).some(m=>m.status==='assigned'&&!TRIAL_POPPED.has(m.id))){setTimeout(()=>showTrialTeacherAlert(id),320);}
  LAST_CLASS_ENTERED=id;
 }
 function setTab(t,id){CLASS_TAB=t;CUR_PERIOD=0;EDIT_IDX=null;renderClass(id);}
@@ -1783,7 +1784,7 @@ async function crmExport(){
    Read-only on every child history; trial data lives in its own isolated STATE.trials. ===== */
 const CRM_TRIALS_URL="https://script.google.com/macros/s/AKfycbxr1ocQ2zn_sJwKk4PHOZ1MYTwaTeuVpNkwBJTm9D7lDcyV7mFVkaifCk6ksLS-mqo/exec";
 const TRANS_CACHE={};
-let TRIALS_LOADED=false,TRIALS_LOADING=false,TRIAL_DISMISSED=new Set();
+let TRIALS_LOADED=false,TRIALS_LOADING=false,TRIAL_DISMISSED=new Set(),TRIAL_POPPED=new Set();
 function gTranslate(text){text=String(text||'').trim();if(!text)return Promise.resolve('');if(TRANS_CACHE[text]!==undefined)return Promise.resolve(TRANS_CACHE[text]);
  return fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=pt&tl=en&dt=t&q='+encodeURIComponent(text)).then(r=>r.json()).then(j=>{let o='';try{(j[0]||[]).forEach(s=>{if(s&&s[0])o+=s[0];});}catch(e){}o=o||text;TRANS_CACHE[text]=o;return o;}).catch(()=>text);}
 function ensureTrials(){STATE.trials=STATE.trials||{};return STATE.trials;}
@@ -1842,6 +1843,40 @@ function showTrialAlert(){
   <button class="btn ghost" onclick="var m=document.getElementById('trialpop');if(m)m.remove();">See later</button></div></div>`;
  document.body.appendChild(w);
 }
+/* Teacher-side popup alert (besides the banner/note), shown on the class card so the teacher can't miss it. */
+function showTrialTeacherAlert(id){
+ const list=trialsForClass(id).filter(m=>m.status==='assigned'&&!TRIAL_POPPED.has(m.id));
+ if(!list.length)return;list.forEach(m=>TRIAL_POPPED.add(m.id));
+ const m=list[0],s=m.snap||{};const ex=document.getElementById('trialtpop');if(ex)ex.remove();
+ const more=list.length>1?` <span class="muted small">(+${list.length-1} more)</span>`:'';
+ const w=document.createElement('div');w.id='trialtpop';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box" style="border-color:var(--purple)"><div class="od-ico">🎒</div><h2 style="color:var(--purple)">New Trial Class for your group!${more}</h2>
+  <p><b>${esc(trialChild(s))}</b> · ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))}</p>
+  ${m.coordNote?`<p class="od-sub">📌 ${esc(m.coordNote)}</p>`:''}
+  <p class="od-sub">A trial student is joining this class — please prepare a warm welcome.</p>
+  <div style="margin-top:8px"><button class="btn" style="background:var(--purple);border-color:var(--purple)" onclick="var x=document.getElementById('trialtpop');if(x)x.remove();trialAck('${m.id}','${id}');">👍 Understood, I'll prepare</button>
+  <button class="btn ghost" onclick="var x=document.getElementById('trialtpop');if(x)x.remove();setTab('trial','${id}');">Open details</button>
+  <button class="btn ghost" onclick="var x=document.getElementById('trialtpop');if(x)x.remove();">See later</button></div></div>`;
+ document.body.appendChild(w);
+}
+/* Coordination: print / download a Trial Classes report */
+function trialReportRows(){return allTrials().sort((a,b)=>new Date(a.snap.data||0)-new Date(b.snap.data||0));}
+function trialStatusLabel(st){return {new:'New',assigned:'Sent to teacher',ack:'Teacher ready',done:'Closed'}[st]||st||'';}
+function printTrials(){
+ const rows=trialReportRows();
+ const tr=rows.map(m=>{const s=m.snap||{};const c=m.classId?getClass(m.classId):null;
+  return `<tr><td>${esc(trialChild(s))}</td><td>${esc(trialAge(s))}</td><td>${esc(trialDate(s))}</td><td>${esc(trialTime(s))}</td><td>${esc(c?c.name+' · '+c.time+' ('+c.teacher+')':'—')}</td><td>${esc(trialStatusLabel(m.status))}</td><td>${esc(s.comentario||'')}</td><td>${esc(m.coordNote||'')}</td><td>${esc(m.teacherComment_en||m.teacherComment||'')}</td><td>${esc(m.observation||'')}</td></tr>`;}).join('');
+ const html=`<html><head><title>Trial Classes Report</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;color:#042342;padding:24px}h1{color:#800080;margin:0 0 4px}table{border-collapse:collapse;width:100%;font-size:12px;margin-top:12px}th,td{border:1px solid #ccc;padding:6px;text-align:left;vertical-align:top}th{background:#F6EEFB}</style></head><body><h1>🎒 Trial Classes Report</h1><div>Kids Garden · ${rows.length} trial class(es)</div><table><tr><th>Child</th><th>Age</th><th>Date</th><th>Time</th><th>Class (teacher)</th><th>Status</th><th>Office comment</th><th>Coordination notes</th><th>Teacher's note</th><th>Observation</th></tr>${tr}</table></body></html>`;
+ const w=window.open('','_blank');if(!w){toast('Please allow pop-ups to print');return;}w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){}},350);
+}
+function downloadTrials(){
+ const rows=trialReportRows();const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+ const head=['Child','Age','Date','Time','Class','Teacher','Status','Office comment','Coordination notes','Teacher note','Observation'];
+ const lines=[head.map(q).join(',')];
+ rows.forEach(m=>{const s=m.snap||{};const c=m.classId?getClass(m.classId):null;lines.push([trialChild(s),trialAge(s),trialDate(s),trialTime(s),c?c.name+' '+c.time:'',c?c.teacher:'',trialStatusLabel(m.status),s.comentario||'',m.coordNote||'',m.teacherComment_en||m.teacherComment||'',m.observation||''].map(q).join(','));});
+ const csv='﻿'+lines.join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');a.href=url;a.download='trial-classes.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('⬇️ Report downloaded');
+}
 /* ---- Coordination: Trial Classes tab ---- */
 function coordTrials(){
  if(!TRIALS_LOADED&&!TRIALS_LOADING)loadTrials();
@@ -1855,7 +1890,8 @@ function coordTrials(){
     <li><b>Close within 24h:</b> while the experience is fresh, use the teacher's note to personalise the message and hand it to the front desk (atendimento) to invite enrolment.</li>
    </ul></div>`;
  const head=`<div class="card"><h3 style="color:var(--purple)">🎒 Trial Classes</h3>
-   <p class="hint">Experimental lessons scheduled by the commercial team. Assign each to a class, brief the teacher and follow the cycle through to enrolment. Shown in English — Portuguese is translated automatically.</p>
+   <p class="hint">Experimental lessons scheduled by the commercial team. Assign each to a class, brief the teacher and follow the cycle through to enrolment.</p>
+   <div class="no-print" style="margin-bottom:4px"><button class="btn ghost sm" onclick="printTrials()">🖨 Print report</button> <button class="btn ghost sm" onclick="downloadTrials()">⬇️ Download (CSV)</button></div>
    ${TRIALS_LOADING?'<p class="muted small">Loading from the sheet…</p>':''}</div>`;
  const body=trials.length?trials.map(trialCoordCard).join(''):(TRIALS_LOADING?'':'<div class="card"><p class="muted">No trial classes scheduled right now.</p></div>');
  return guide+head+body;
