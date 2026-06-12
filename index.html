@@ -1804,6 +1804,7 @@ async function loadTrials(){
   TRIALS_LOADED=true;
  }catch(e){TRIALS_LOADED=true;}
  TRIALS_LOADING=false;try{render();}catch(e){}
+ try{showTrialAlert();}catch(e){}
 }
 function refreshTrials(){TRIALS_LOADED=false;TRIALS_LOADING=false;toast('🔄 Checking the commercial sheet…');loadTrials();}
 /* auto-check the commercial sheet every 60s while Coordination is open, so nobody has to remember to refresh.
@@ -1820,8 +1821,26 @@ async function pollTrials(){
  }catch(e){}
  TRIALS_LOADING=false;
  if(added>0){let typing=false;try{const ae=document.activeElement;typing=ae&&/^(TEXTAREA|INPUT|SELECT)$/.test(ae.tagName);}catch(e){}
-  toast('🎒 '+added+' new trial class'+(added>1?'es':'')+' received');
-  if(!typing){try{renderCoord();}catch(e){}}}
+  if(!typing){try{renderCoord();}catch(e){}}
+  try{showTrialAlert();}catch(e){}}
+}
+/* Popup alert window shown when Coordination opens (or a new trial arrives) and there are trials
+   that have not been alerted before. Marks them alerted so it won't nag again. */
+function showTrialAlert(){
+ if(!COORD_OK||VIEW.name!=='coord')return;
+ const list=allTrials().filter(m=>!m.coordAlerted&&m.status!=='done');
+ if(!list.length)return;
+ list.forEach(m=>{m.coordAlerted=true;});try{save();}catch(e){}
+ const ex=document.getElementById('trialpop');if(ex)ex.remove();
+ const items=list.slice(0,6).map(m=>{const s=m.snap||{};return `<div class="flag warn" style="text-align:left;margin-top:6px"><span class="fi">🎒</span><div><b>${esc(trialChild(s))}</b> · ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))}</div></div>`;}).join('');
+ const w=document.createElement('div');w.id='trialpop';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box" style="border-color:var(--purple)"><div class="od-ico">🎒</div><h2 style="color:var(--purple)">New Trial Class${list.length>1?'es':''} to schedule!</h2>
+  <p><b>${list.length}</b> experimental class${list.length>1?'es have':' has'} just come from the commercial team.</p>
+  ${items}${list.length>6?`<p class="od-sub">…and ${list.length-6} more.</p>`:''}
+  <p class="od-sub">Assign each one to a class and brief the teacher to start the cycle.</p>
+  <div style="margin-top:8px"><button class="btn" style="background:var(--purple);border-color:var(--purple)" onclick="var m=document.getElementById('trialpop');if(m)m.remove();setCoordTab('trials');">🎒 Open Trial Classes</button>
+  <button class="btn ghost" onclick="var m=document.getElementById('trialpop');if(m)m.remove();">See later</button></div></div>`;
+ document.body.appendChild(w);
 }
 /* ---- Coordination: Trial Classes tab ---- */
 function coordTrials(){
@@ -2150,7 +2169,7 @@ function renderCoordGate(){
    <p class="small muted" style="margin-top:14px"><button class="back" onclick="go('home')" style="box-shadow:none">← Back home</button></p></div>`;
  setTimeout(()=>{const el=$("#pwd");if(el)el.focus();},50);
 }
-function tryPwd(){const el=$("#pwd");const val=el?String(el.value).trim():'';if(val===COORD_PWD){COORD_OK=true;COORD_TAB='overview';toast("✅ Welcome, Coordination");renderCoord();}else toast("❌ Wrong password");}
+function tryPwd(){const el=$("#pwd");const val=el?String(el.value).trim():'';if(val===COORD_PWD){COORD_OK=true;COORD_TAB='overview';TRIALS_LOADED=false;TRIALS_LOADING=false;toast("✅ Welcome, Coordination");renderCoord();}else toast("❌ Wrong password");}
 function renderCoord(){
  const totalPend=CLASSES.reduce((a,c)=>a+pendingFor(c.id,'coord').length,0);
  if(!TRIALS_LOADED&&!TRIALS_LOADING)loadTrials();
