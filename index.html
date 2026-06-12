@@ -731,7 +731,7 @@ function loggedReports(id){return sessionsOf(id).filter(isRealReport).length;}
 /* ============================================================ ROUTER ============================================================ */
 let VIEW={name:'home'};
 let ALERTED=null,MSG_DISMISSED=new Set(),KD_DISMISSED=new Set();
-function go(name,arg){VIEW={name,arg};if(name!=='class'){ALERTED=null;EDIT_IDX=null;}if(name==='coord'){COORD_OK=false;RPT={};COORD_ACT_POPPED=false;}MSG_DISMISSED=new Set();KD_DISMISSED=new Set();try{window.scrollTo(0,0);}catch(e){}render();}
+function go(name,arg){VIEW={name,arg};if(name!=='coord'){try{stopTrialsPolling();}catch(e){}}if(name!=='class'){ALERTED=null;EDIT_IDX=null;}if(name==='coord'){COORD_OK=false;RPT={};COORD_ACT_POPPED=false;}MSG_DISMISSED=new Set();KD_DISMISSED=new Set();try{window.scrollTo(0,0);}catch(e){}render();}
 /* ---- Coordination ↔ Teacher messaging ---- */
 function msgs(cid){STATE.messages=STATE.messages||{};return STATE.messages[cid]||(STATE.messages[cid]=[]);}
 function pendingFor(cid,role){return msgs(cid).filter(m=>m.from!==role&&m.status==='open');}
@@ -1806,6 +1806,23 @@ async function loadTrials(){
  TRIALS_LOADING=false;try{render();}catch(e){}
 }
 function refreshTrials(){TRIALS_LOADED=false;TRIALS_LOADING=false;toast('🔄 Checking the commercial sheet…');loadTrials();}
+/* auto-check the commercial sheet every 60s while Coordination is open, so nobody has to remember to refresh.
+   Won't re-render while someone is typing (keeps their text); skips when the browser tab is hidden. */
+let TRIALS_POLL=null;
+function startTrialsPolling(){if(TRIALS_POLL)return;TRIALS_POLL=setInterval(pollTrials,60000);}
+function stopTrialsPolling(){if(TRIALS_POLL){clearInterval(TRIALS_POLL);TRIALS_POLL=null;}}
+async function pollTrials(){
+ if(!COORD_OK||VIEW.name!=='coord'||TRIALS_LOADING)return;
+ try{if(document.hidden)return;}catch(e){}
+ TRIALS_LOADING=true;let added=0;
+ try{const r=await fetch(CRM_TRIALS_URL);const j=await r.json();const aulas=(j&&j.aulas)||[];ensureTrials();
+  for(const t of aulas){const k=trialKey(t);let m=STATE.trials[k];if(!m){m=STATE.trials[k]={status:'new',ts:Date.now(),id:newTrialId()};m.snap=t;m.comment_en=await gTranslate(t.comentario);added++;}else{m.snap=t;}}
+ }catch(e){}
+ TRIALS_LOADING=false;
+ if(added>0){let typing=false;try{const ae=document.activeElement;typing=ae&&/^(TEXTAREA|INPUT|SELECT)$/.test(ae.tagName);}catch(e){}
+  toast('🎒 '+added+' new trial class'+(added>1?'es':'')+' received');
+  if(!typing){try{renderCoord();}catch(e){}}}
+}
 /* ---- Coordination: Trial Classes tab ---- */
 function coordTrials(){
  if(!TRIALS_LOADED&&!TRIALS_LOADING)loadTrials();
@@ -2137,6 +2154,7 @@ function tryPwd(){const el=$("#pwd");const val=el?String(el.value).trim():'';if(
 function renderCoord(){
  const totalPend=CLASSES.reduce((a,c)=>a+pendingFor(c.id,'coord').length,0);
  if(!TRIALS_LOADED&&!TRIALS_LOADING)loadTrials();
+ startTrialsPolling();
  const bt=birthdaysToday().length;const fc=coordPendingActions().length;const nt=newTrialsCount();const tabs=[['overview','📊 Class Performance'],['teachers','⏰ Teacher Compliance'],['attention','🔎 Children to Watch'],['follow','🚦 Follow-ups'+(fc?` (${fc})`:'')],['reports','📄 Progress Reports'],['messages','✉️ Messages'+(totalPend?` (${totalPend})`:'')],['birthdays','👧 Students/Birthdays'+(bt?` (${bt})`:'')],['trials','🎒 Trial Classes'+(nt?` (${nt})`:'')],['structure','🏗 Structural Organization']];
  app().innerHTML=`<div class="page-head"><button class="back" onclick="go('home')">← Home</button>
    <div><h2>🧭 Coordination Dashboard</h2><div class="sub">Full pedagogical oversight · ${CLASSES.filter(c=>c.count).length} classes · ${countedStudents()} students</div></div></div>
