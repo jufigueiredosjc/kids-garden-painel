@@ -959,12 +959,12 @@ function saveEdit(id,i){try{
  else if(fl){names=fluentRoster(s.slot||c.slots[0]).slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else if(c.special==='cambridge'){names=cambRoster(s.level||'').slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else{names=[...c.students];Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
- const missing=[];names.forEach((n,k)=>{const att=$v('eatt_'+k);const obs=$v('eobs_'+k).trim();if((att==='Present'||att==='Late')&&!obs)missing.push(displayName(id,n));});
+ if(obsRequired(c)){const missing=[];names.forEach((n,k)=>{const att=$v('eatt_'+k);const obs=$v('eobs_'+k).trim();const el=$("#eobs_"+k);if(el)el.style.borderColor='';if((att==='Present'||att==='Late')&&!obs){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});if(missing.length){toast('✍️ Observation required for present children: '+missing.join(', '));return;}}
  s.date=$v('e_date')||s.date;s.theme=$v('e_theme');s.high=$v('e_high');s.improve=$v('e_improve');
  if(fl&&$("#e_slot"))s.slot=$v('e_slot');
  const ph=c.track==='phonics';
  const rows={};names.forEach((n,k)=>{if(fl){rows[n]={att:$v('eatt_'+k)||'Present',obs:$v('eobs_'+k)};}else{const row={att:$v('eatt_'+k)||'Present',hw:$v('ehw_'+k),dollar:c.kidDollar?(Number($v('edol_'+k))||0):0,obs:$v('eobs_'+k)};if(ph&&$("#ephon_"+k)){row.phon=$v('ephon_'+k);row.phsk=readPhonSkills('ephon',k);}rows[n]=row;}});
- s.rows=rows;save();EDIT_IDX=null;renderClass(id);toast(missing.length?('✅ Saved — reminder: observation still missing for '+missing.length+' student'+(missing.length>1?'s':'')):'✅ Report updated');
+ s.rows=rows;save();toast('✅ Report updated');EDIT_IDX=null;renderClass(id);
 }catch(err){toast('⚠️ Could not save the changes: '+(err&&err.message||err));}}
 
 /* ============================================================ FLUENT STEPS (Monday club, by time slot) ============================================================ */
