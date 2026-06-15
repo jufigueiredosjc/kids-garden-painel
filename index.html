@@ -2598,15 +2598,15 @@ function parentOverall(cid,name){const st=studentStats(cid,name);const prof=stro
  let s=`${f} is developing well and engaging with English in a natural, joyful way`;
  if(prof.length)s+=`, showing real confidence in ${prof.slice(0,3).join(', ')}`;
  s+='.';
- if(dev.length)s+=` With gentle, playful practice in ${dev.slice(0,2).join(' and ')}, ${f} will keep growing steadily — exactly as we expect at this stage.`;
+ if(dev.length)s+=` With gentle, playful practice in ${dev.slice(0,2).join(' and ')}, ${f} will keep growing steadily, just as we expect at this stage.`;
  return esc(s);}
 function parentOverviewBullets(cid,name){const st=studentStats(cid,name);const prof=strongSkills(cid,name);const B=[];
- if(st.attRate!=null)B.push(`<b>Attendance:</b> ${st.attRate}% — ${st.attRate>=90?'wonderful, consistent presence in class.':st.attRate>=75?'good presence in class.':'every class is a precious chance to keep growing.'}`);
+ if(st.attRate!=null)B.push(`<b>Attendance:</b> ${st.attRate}%. ${st.attRate>=90?'A wonderful, consistent presence in class.':st.attRate>=75?'A good presence in class.':'Every class is a precious chance to keep growing.'}`);
  if(prof.length)B.push(`<b>Confident in:</b> ${prof.map(esc).join(', ')}.`);
  B.push(`<b>Overall:</b> ${parentOverall(cid,name)}`);
  return B;}
 function parentTestsSection(cid,name,tests){const c=getClass(cid);if(!hasTests(c))return '';
- const rows=tests.filter(t=>t.score!=null||t.level).map(t=>`<tr><td>${esc(t.u)}</td><td>${esc(t.level||'Basic')}</td><td>${t.score==null?'—':esc(t.score)}</td></tr>`).join('');
+ const rows=tests.filter(t=>t.score!=null||t.level).map(t=>`<tr><td>${esc(t.u)}</td><td>${esc(t.level||'Basic')}</td><td>${t.score==null?'n/a':esc(t.score)}</td></tr>`).join('');
  if(!rows)return '';
  return `<hr class="sep"><h3>🧪 ${esc(testName(c))}s</h3><div class="tbl-wrap"><table><tr><th>${esc(testName(c))}</th><th>Level</th><th>Score</th></tr>${rows}</table></div>${parentBelowAnalysis(cid,name,tests)}`;}
 function parentBelowAnalysis(cid,name,tests){const low=tests.filter(t=>t.score!=null&&Number(t.score)<6);if(!low.length)return '';
@@ -2617,26 +2617,33 @@ function parentBelowAnalysis(cid,name,tests){const low=tests.filter(t=>t.score!=
  else if(/distract|focus|atten/.test(blob))theme='a few moments of distraction during the task';
  else if(/understand|confus|instruct|didn'?t|did not/.test(blob))theme='needing the instructions explained once more before starting';
  else if(/absen/.test(blob))theme='a couple of absences that briefly interrupted the routine';
- const msg=`On one of the recent assessments, ${f} scored a little below the usual. Looking back at the class notes, this seems linked to ${theme||'a tricky moment with the material that day'} — nothing to worry about. With a calm review at home and our continued support in class, ${f} will quickly get back on track; this is a normal part of learning.`;
+ const msg=`On one of the recent assessments, ${f} scored a little below the usual. Looking at the overall picture, this seems linked to ${theme||'a tricky moment with the material that day'}, and it is nothing to worry about. With a calm review at home and our continued support in class, ${f} will quickly get back on track, as this is a natural part of learning.`;
  return `<div class="flag warn" style="margin-top:8px"><span class="fi">💡</span><div>${esc(msg)}</div></div>`;}
-function parentHighlights(cid,name){const H=synthHighlights(cid,name);const f=parentFirst(cid,name);
- if(H.strengths&&H.strengths.length)return `<ul style="margin:0 0 0 18px">${H.strengths.map(o=>`<li>${esc(o.obs)}</li>`).join('')}</ul>`;
- const prof=strongSkills(cid,name);
- if(prof.length)return `<ul style="margin:0 0 0 18px"><li>${f} shows real confidence in ${esc(prof.slice(0,3).join(', '))}.</li><li>${f} engages with English in a joyful, natural way and loves taking part in class.</li></ul>`;
- return `<p class="muted small">${f} is settling in beautifully — more highlights will appear as the term continues.</p>`;}
+function parentHighlights(cid,name){const f=parentFirst(cid,name);const st=studentStats(cid,name);const prof=strongSkills(cid,name);
+ let obs='';try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}const blob=obs.toLowerCase();const B=[];
+ if(prof.length)B.push(`${f} communicates in English with real confidence in ${prof.slice(0,3).join(', ')}.`);
+ if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(blob))B.push(`${f} takes part actively and with genuine enthusiasm, contributing naturally in English.`);
+ if(/vocab|word|sentence|spontan|fluen|spoke|speaking|express/.test(blob))B.push(`${f} is using new vocabulary and expressing ideas more and more spontaneously.`);
+ if(/project|creat|made|built|craft|imagin/.test(blob))B.push(`${f} brings creativity and focus to the class projects.`);
+ if(/help|kind|friend|share|leader|social|caring|polite/.test(blob))B.push(`${f} is caring and collaborative, a lovely presence in the group.`);
+ if(st.attRate!=null&&st.attRate>=85)B.push(`A consistent attendance shows ${f} has built a strong, healthy learning routine.`);
+ if(B.length<2){B.push(`${f} shows a positive, curious attitude that supports steady progress.`);if(!prof.length)B.push(`${f} is settling in beautifully and engaging joyfully with English.`);}
+ return `<ul style="margin:0 0 0 18px">${B.slice(0,5).map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;}
+function parentInCamb(cid,name){const full=((displayName(cid,name)||name)+'').trim().toLowerCase();let r={};try{r=cambState().roster||{};}catch(e){return null;}let level='',cn='';(typeof CAMB_LEVELS!=='undefined'?CAMB_LEVELS:[]).forEach(l=>{(r[l]||[]).forEach(x=>{if(((displayName('cambridge_prep',x)||x)+'').trim().toLowerCase()===full){level=l;cn=x;}});});if(!level)return null;let band=null,mocks=0;try{band=cambBand(cn);}catch(e){}try{mocks=(cambMocks(cn)||[]).length;}catch(e){}return {level:level,band:band,mocks:mocks};}
+function parentInFluent(cid,name){const full=((displayName(cid,name)||name)+'').trim().toLowerCase();const fc=getClass('fluent_steps');if(!fc)return null;let slot='';(fc.slots||[]).forEach(sl=>{fluentRoster(sl).forEach(fn=>{if(((displayName('fluent_steps',fn)||fn)+'').trim().toLowerCase()===full)slot=sl;});});if(!slot)return null;let present=0,total=0;try{sessionsOf('fluent_steps').forEach(s=>{const rows=s.rows||{};Object.keys(rows).forEach(rn=>{if(((displayName('fluent_steps',rn)||rn)+'').trim().toLowerCase()===full){total++;if(rows[rn].att==='Present'||rows[rn].att==='Late')present++;}});});}catch(e){}return {slot:slot,present:present,total:total};}
 function parentExtraActivities(cid,name){const f=parentFirst(cid,name);let blocks='';
- let cl=null;try{cl=cambLevelOf(name);}catch(e){}
- if(cl){let b=null;try{b=cambBand(name);}catch(e){}blocks+=`<div class="comp" style="border-color:var(--purple)"><h5>🎓 Cambridge Preparation — ${esc(cl)}</h5><p class="small">${f} takes part in our official Cambridge preparation programme at <b>${esc(cl)}</b> level, building exam confidence and strengthening listening, reading, writing and speaking through structured, supportive practice. ${b?'Practice results show steady, encouraging progress.':'A wonderful commitment and a positive attitude towards this journey.'}</p></div>`;}
- let inFluent=false;try{inFluent=((getClass('fluent_steps')||{}).slots||[]).some(sl=>fluentRoster(sl).includes(name));}catch(e){}
- if(inFluent)blocks+=`<div class="comp" style="border-color:#FF914D"><h5>🗣️ Fluent Steps — conversation club</h5><p class="small">${f} also joins our Monday <b>Fluent Steps</b> conversation club — an extra, relaxed space to speak English freely. This nurtures oral confidence, spontaneity and a genuine love of communicating in English.</p></div>`;
+ const cb=parentInCamb(cid,name);
+ if(cb){const freq=cb.mocks>=3?'with assiduous, committed participation':(cb.mocks>=1?'with steady participation':'with a positive start');blocks+=`<div class="comp" style="border-color:var(--purple)"><h5>🎓 Cambridge Preparation (${esc(cb.level)})</h5><p class="small">${f} takes part in our official Cambridge preparation programme at ${esc(cb.level)} level, ${freq}, strengthening listening, reading, writing and speaking through structured, supportive practice. ${cb.band?'Practice results show steady, encouraging progress and growing exam confidence.':'A wonderful attitude and a strong commitment to this journey.'}</p></div>`;}
+ const fl=parentInFluent(cid,name);
+ if(fl){const rate=fl.total>0?fl.present/fl.total:0;const freq=(fl.total>=4&&rate>=0.7)?'attending assiduously':(fl.present>0?'taking part regularly':'beginning to take part');blocks+=`<div class="comp" style="border-color:#FF914D"><h5>🗣️ Fluent Steps (conversation club)</h5><p class="small">${f} also joins our Monday Fluent Steps conversation club, ${freq}, a relaxed extra space to speak English freely. This nurtures oral confidence, spontaneity and a genuine love of communicating in English, and it is a meaningful part of ${f}'s development beyond the regular classes.</p></div>`;}
  if(!blocks)return '';
  return `<hr class="sep"><h3>✨ Extra activities</h3>${blocks}`;}
 function parentNeuroComment(cid,name){const c=getClass(cid);const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const young=["Nursery","Kinder","KinderPlus","K1"].includes(c.level);
- let s=`At Kids Garden, ${f} learns English the way the brain learns best — through meaningful, playful and repeated experiences rather than memorisation. `;
+ let s=`At Kids Garden, ${f} learns English the way the brain learns best, through meaningful, playful and repeated experiences rather than memorisation. `;
  if(prof.length)s+=`The confident growth in ${prof.slice(0,3).join(', ')} tells us the language is becoming natural and automatic for ${f}. `;
  if(young)s+=`At this age the brain is wonderfully receptive to sounds and patterns, so every song, game and gesture helps English settle deeply and joyfully. `;
  else s+=`As the brain consolidates language through varied, spaced practice, ${f}'s skills are gradually moving from effort into ease. `;
- if(dev.length)s+=`A gentle, encouraging focus on ${dev.slice(0,2).join(' and ')} — always with warmth and never pressure — will keep this growth steady, because a calm, confident mind is what truly unlocks learning. `;
+ if(dev.length)s+=`A gentle, encouraging focus on ${dev.slice(0,2).join(' and ')}, always with warmth and never pressure, will keep this growth steady, because a calm and confident mind is what truly unlocks learning. `;
  s+=`Overall, ${f} is developing beautifully, and we feel privileged to be part of this journey with your family.`;
  return esc(s);}
 function parentReportCard(cid,name){
