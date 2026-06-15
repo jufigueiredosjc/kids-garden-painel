@@ -1995,51 +1995,42 @@ function coordSkills(){
    ${units.length?units.map(u=>`<div class="comp" style="border-color:#2C6FB0"><h5>📚 ${esc(u.name)} <span class="no-print" style="float:right;font-weight:600"><button class="btn ghost sm" onclick="addUnitModal('${esc(lvl)}','${u.id}')">✏️ Edit</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteUnit('${esc(lvl)}','${u.id}')">🗑 Delete</button></span></h5>${(SKILLSETS[lvl]||[]).filter(s=>u.byskill&&u.byskill[s]&&u.byskill[s].length).map(s=>`<div style="margin-top:4px"><b class="small">🎯 ${esc(s)}</b><ul style="margin:2px 0 0 18px">${u.byskill[s].map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')||'<p class="muted small">No competencies added yet.</p>'}</div>`).join(''):'<p class="muted small">No units added yet. Click “➕ Add unit”.</p>'}
   </div>`:''}`;
 }
-function addProjectModal(lvl,pid){
- const list=levelProjects(lvl);const p=pid?list.find(x=>x.id===pid):null;
- const ex=document.getElementById('pjmodal');if(ex)ex.remove();
+let PJ_DRAFT=null;
+function addProjectModal(lvl,pid){const p=pid?levelProjects(lvl).find(x=>x.id===pid):null;PJ_DRAFT={lvl:lvl,pid:pid||null,name:p?p.name:'',skills:(p&&p.skills)?p.skills.slice():[]};renderProjectModal();}
+function pjSyncName(){if(PJ_DRAFT){const el=$("#pj_name");if(el)PJ_DRAFT.name=String(el.value);}}
+function renderProjectModal(){if(!PJ_DRAFT)return;const d=PJ_DRAFT;const ex=document.getElementById('pjmodal');if(ex)ex.remove();
+ const items=d.skills.length?d.skills.map((s,i)=>`<div class="comp" style="display:flex;align-items:center;gap:8px;padding:6px 9px;margin:4px 0;border-color:var(--green)"><span style="flex:1">${esc(s)}</span><button class="btn ghost sm" onclick="pjDraftEdit(${i})">✏️</button><button class="btn ghost sm" style="color:var(--bad)" onclick="pjDraftDel(${i})">🗑</button></div>`).join(''):'<p class="muted small">No skills yet — add the first one below.</p>';
  const w=document.createElement('div');w.id='pjmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
- w.innerHTML=`<div class="od-box" style="border-color:var(--green);max-width:560px;text-align:left;max-height:88vh;overflow:auto"><h2 style="color:var(--navy);font-size:19px">${p?'✏️ Edit project':'➕ New project'} — ${esc(lvl)}</h2>
-   <label class="fl">Project name</label><input class="inp" id="pj_name" value="${p?esc(p.name):''}" placeholder="e.g. Pirate Project">
-   <label class="fl" style="margin-top:8px">Skills / competencies <span class="muted small">(one per line — can-do style)</span></label>
-   <textarea class="inp" id="pj_skills" rows="7" placeholder="Uses project vocabulary in short sentences&#10;Collaborates with peers to build the project&#10;Presents the final project in English">${p&&p.skills?esc(p.skills.join('\n')):''}</textarea>
-   <div style="margin-top:12px"><button class="btn" onclick="saveProject('${esc(lvl)}',${p?`'${p.id}'`:'null'})">💾 Save &amp; publish</button>
-   <button class="btn ghost" onclick="document.getElementById('pjmodal').remove()">Cancel</button></div></div>`;
- document.body.appendChild(w);setTimeout(()=>{const e=$("#pj_name");if(e)e.focus();},40);
-}
-function saveProject(lvl,pid){
- const nameEl=$("#pj_name");const name=nameEl?String(nameEl.value).trim():'';if(!name){toast('✍️ Give the project a name');return;}
- const skEl=$("#pj_skills");const skills=(skEl?String(skEl.value):'').split('\n').map(s=>s.trim()).filter(Boolean);
- STATE.projects=STATE.projects||{};STATE.projects[lvl]=STATE.projects[lvl]||[];
- if(pid&&pid!=='null'){const p=STATE.projects[lvl].find(x=>x.id===pid);if(p){p.name=name;p.skills=skills;}}
- else{STATE.projects[lvl].push({id:'pj_'+Math.random().toString(36).slice(2,9),name:name,skills:skills});}
- save();const m=document.getElementById('pjmodal');if(m)m.remove();toast('✅ Project published');renderCoord();
-}
+ w.innerHTML=`<div class="od-box" style="border-color:var(--green);max-width:580px;text-align:left;max-height:88vh;overflow:auto"><h2 style="color:var(--navy);font-size:19px">🎨 ${d.pid?'Edit project':'New project'} — ${esc(d.lvl)}</h2>
+   <label class="fl">Project name</label><input class="inp" id="pj_name" value="${esc(d.name||'')}" placeholder="e.g. Pirate Project">
+   <label class="fl" style="margin-top:10px">Skills / competencies <span class="muted small">(add one at a time — can-do style)</span></label>
+   <div>${items}</div>
+   <div style="display:flex;gap:8px;margin-top:8px"><input class="inp" id="pj_new" style="flex:1" placeholder="e.g. Uses pirate vocabulary in short sentences" onkeydown="if(event.key==='Enter'){event.preventDefault();pjDraftAdd();}"><button class="btn" onclick="pjDraftAdd()">➕ Add</button></div>
+   <div style="margin-top:14px"><button class="btn" onclick="pjDraftSave()">💾 Save &amp; publish</button> <button class="btn ghost" onclick="PJ_DRAFT=null;document.getElementById('pjmodal').remove()">Cancel</button></div></div>`;
+ document.body.appendChild(w);setTimeout(()=>{const e=$("#pj_new");if(e)e.focus();},40);}
+function pjDraftAdd(){if(!PJ_DRAFT)return;pjSyncName();const el=$("#pj_new");const v=el?String(el.value).trim():'';if(!v)return;PJ_DRAFT.skills.push(v);renderProjectModal();}
+function pjDraftEdit(i){if(!PJ_DRAFT)return;pjSyncName();const v=prompt('Edit skill / competency:',PJ_DRAFT.skills[i]);if(v!==null){const t=String(v).trim();if(t)PJ_DRAFT.skills[i]=t;else PJ_DRAFT.skills.splice(i,1);}renderProjectModal();}
+function pjDraftDel(i){if(!PJ_DRAFT)return;pjSyncName();PJ_DRAFT.skills.splice(i,1);renderProjectModal();}
+function pjDraftSave(){if(!PJ_DRAFT)return;pjSyncName();const d=PJ_DRAFT;const name=String(d.name||'').trim();if(!name){toast('✍️ Give the project a name');return;}STATE.projects=STATE.projects||{};STATE.projects[d.lvl]=STATE.projects[d.lvl]||[];if(d.pid){const p=STATE.projects[d.lvl].find(x=>x.id===d.pid);if(p){p.name=name;p.skills=d.skills;}}else{STATE.projects[d.lvl].push({id:'pj_'+Math.random().toString(36).slice(2,9),name:name,skills:d.skills});}save();PJ_DRAFT=null;const m=document.getElementById('pjmodal');if(m)m.remove();toast('✅ Project published');renderCoord();}
 function deleteProject(lvl,pid){if(!confirm('Delete this project and its skills?'))return;STATE.projects=STATE.projects||{};STATE.projects[lvl]=(STATE.projects[lvl]||[]).filter(x=>x.id!==pid);save();toast('🗑 Project deleted');renderCoord();}
 /* Units added by coordination (K1+ only), competencies organised by skill. Pre-formatted units are never touched. */
 function levelUnits(lvl){STATE.unitsAdd=STATE.unitsAdd||{};return STATE.unitsAdd[lvl]||[];}
-function addUnitModal(lvl,uid){
- const list=levelUnits(lvl);const u=uid?list.find(x=>x.id===uid):null;
- const skills=SKILLSETS[lvl]||['Listening','Speaking','Reading','Writing'];
- const ex=document.getElementById('unmodal');if(ex)ex.remove();
- const fields=skills.map(s=>{const sid=s.replace(/[^a-zA-Z0-9]/g,'_');const val=(u&&u.byskill&&u.byskill[s])?esc(u.byskill[s].join('\n')):'';return `<label class="fl" style="margin-top:8px">🎯 ${esc(s)} <span class="muted small">(one per line)</span></label><textarea class="inp" id="un_${sid}" rows="3">${val}</textarea>`;}).join('');
+let UN_DRAFT=null;
+function addUnitModal(lvl,uid){const u=uid?levelUnits(lvl).find(x=>x.id===uid):null;const byskill={};(SKILLSETS[lvl]||['Listening','Speaking','Reading','Writing']).forEach(s=>{byskill[s]=(u&&u.byskill&&u.byskill[s])?u.byskill[s].slice():[];});UN_DRAFT={lvl:lvl,uid:uid||null,unit:(u&&u.unit)?u.unit:1,byskill:byskill};renderUnitModal();}
+function renderUnitModal(){if(!UN_DRAFT)return;const d=UN_DRAFT;const skills=SKILLSETS[d.lvl]||['Listening','Speaking','Reading','Writing'];const ex=document.getElementById('unmodal');if(ex)ex.remove();
+ const opts=[1,2,3,4,5,6,7,8,9].map(n=>`<option value="${n}" ${d.unit===n?'selected':''}>Unit ${n}</option>`).join('');
+ const blocks=skills.map((s,idx)=>{const sid=s.replace(/[^a-zA-Z0-9]/g,'_');const arr=d.byskill[s]||[];const items=arr.length?arr.map((x,i)=>`<div class="comp" style="display:flex;align-items:center;gap:8px;padding:5px 8px;margin:3px 0;border-color:#2C6FB0"><span style="flex:1">${esc(x)}</span><button class="btn ghost sm" onclick="unDraftEdit(${idx},${i})">✏️</button><button class="btn ghost sm" style="color:var(--bad)" onclick="unDraftDel(${idx},${i})">🗑</button></div>`).join(''):'<p class="muted small" style="margin:2px 0">—</p>';
+   return `<div style="margin-top:10px;border-top:1px solid #eee;padding-top:6px"><b class="small">🎯 ${esc(s)}</b>${items}<div style="display:flex;gap:6px;margin-top:4px"><input class="inp" id="un_in_${sid}" style="flex:1;padding:5px 8px" placeholder="Add a ${esc(s)} competency…" onkeydown="if(event.key==='Enter'){event.preventDefault();unDraftAdd(${idx});}"><button class="btn sm" onclick="unDraftAdd(${idx})">➕</button></div></div>`;}).join('');
  const w=document.createElement('div');w.id='unmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
- w.innerHTML=`<div class="od-box" style="border-color:#2C6FB0;max-width:600px;text-align:left;max-height:88vh;overflow:auto"><h2 style="color:var(--navy);font-size:19px">${u?'✏️ Edit unit':'➕ New unit'} — ${esc(lvl)}</h2>
-   <label class="fl">Unit name</label><input class="inp" id="un_name" value="${u?esc(u.name):''}" placeholder="e.g. Unit 5 — My Family">
-   ${fields}
-   <div style="margin-top:12px"><button class="btn" onclick="saveUnit('${esc(lvl)}',${u?`'${u.id}'`:'null'})">💾 Save &amp; publish</button>
-   <button class="btn ghost" onclick="document.getElementById('unmodal').remove()">Cancel</button></div></div>`;
- document.body.appendChild(w);setTimeout(()=>{const e=$("#un_name");if(e)e.focus();},40);
-}
-function saveUnit(lvl,uid){
- const nameEl=$("#un_name");const name=nameEl?String(nameEl.value).trim():'';if(!name){toast('✍️ Give the unit a name');return;}
- const skills=SKILLSETS[lvl]||['Listening','Speaking','Reading','Writing'];const byskill={};
- skills.forEach(s=>{const sid=s.replace(/[^a-zA-Z0-9]/g,'_');const el=$("#un_"+sid);const lines=(el?String(el.value):'').split('\n').map(x=>x.trim()).filter(Boolean);if(lines.length)byskill[s]=lines;});
- STATE.unitsAdd=STATE.unitsAdd||{};STATE.unitsAdd[lvl]=STATE.unitsAdd[lvl]||[];
- if(uid&&uid!=='null'){const u=STATE.unitsAdd[lvl].find(x=>x.id===uid);if(u){u.name=name;u.byskill=byskill;}}
- else{STATE.unitsAdd[lvl].push({id:'un_'+Math.random().toString(36).slice(2,9),name:name,byskill:byskill});}
- save();const m=document.getElementById('unmodal');if(m)m.remove();toast('✅ Unit published');renderCoord();
-}
+ w.innerHTML=`<div class="od-box" style="border-color:#2C6FB0;max-width:620px;text-align:left;max-height:88vh;overflow:auto"><h2 style="color:var(--navy);font-size:19px">📚 ${d.uid?'Edit unit':'New unit'} — ${esc(d.lvl)}</h2>
+   <label class="fl">Unit</label><select class="inp" id="un_num" onchange="if(UN_DRAFT)UN_DRAFT.unit=Number(this.value)">${opts}</select>
+   <p class="hint" style="margin-top:8px">Add competencies for each skill — one at a time.</p>${blocks}
+   <div style="margin-top:14px"><button class="btn" onclick="unDraftSave()">💾 Save &amp; publish</button> <button class="btn ghost" onclick="UN_DRAFT=null;document.getElementById('unmodal').remove()">Cancel</button></div></div>`;
+ document.body.appendChild(w);}
+function unDraftAdd(idx){if(!UN_DRAFT)return;const s=(SKILLSETS[UN_DRAFT.lvl]||[])[idx];if(!s)return;const sid=s.replace(/[^a-zA-Z0-9]/g,'_');const el=$("#un_in_"+sid);const v=el?String(el.value).trim():'';if(!v)return;UN_DRAFT.byskill[s]=UN_DRAFT.byskill[s]||[];UN_DRAFT.byskill[s].push(v);renderUnitModal();}
+function unDraftEdit(idx,i){if(!UN_DRAFT)return;const s=(SKILLSETS[UN_DRAFT.lvl]||[])[idx];if(!s)return;const arr=UN_DRAFT.byskill[s]||[];const v=prompt('Edit competency:',arr[i]);if(v!==null){const t=String(v).trim();if(t)arr[i]=t;else arr.splice(i,1);}renderUnitModal();}
+function unDraftDel(idx,i){if(!UN_DRAFT)return;const s=(SKILLSETS[UN_DRAFT.lvl]||[])[idx];if(!s)return;(UN_DRAFT.byskill[s]||[]).splice(i,1);renderUnitModal();}
+function unDraftSave(){if(!UN_DRAFT)return;const d=UN_DRAFT;const name='Unit '+d.unit;const byskill={};Object.keys(d.byskill).forEach(s=>{if(d.byskill[s]&&d.byskill[s].length)byskill[s]=d.byskill[s];});STATE.unitsAdd=STATE.unitsAdd||{};STATE.unitsAdd[d.lvl]=STATE.unitsAdd[d.lvl]||[];if(d.uid){const u=STATE.unitsAdd[d.lvl].find(x=>x.id===d.uid);if(u){u.unit=d.unit;u.name=name;u.byskill=byskill;}}else{STATE.unitsAdd[d.lvl].push({id:'un_'+Math.random().toString(36).slice(2,9),unit:d.unit,name:name,byskill:byskill});}save();UN_DRAFT=null;const m=document.getElementById('unmodal');if(m)m.remove();toast('✅ Unit published');renderCoord();}
 function deleteUnit(lvl,uid){if(!confirm('Delete this unit and its competencies?'))return;STATE.unitsAdd=STATE.unitsAdd||{};STATE.unitsAdd[lvl]=(STATE.unitsAdd[lvl]||[]).filter(x=>x.id!==uid);save();toast('🗑 Unit deleted');renderCoord();}
 function coordStructure(){
  const rows=CLASSES.map(c=>{const L=LEVELS[c.level]||{};const custom=(STATE.customClasses||[]).some(x=>x.id===c.id);
