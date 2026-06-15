@@ -1437,8 +1437,8 @@ function savePersonalizedReport(id){try{
 function tabSkills(id){
  const c=getClass(id);const set=SKILLSETS[c.level]||SKILLSETS.K1;const comps=COMPETENCIES[c.level]||{};
  if(c.track==="none")return tabSkillsSimple(id);
- if(c.track==="nursery")return tabSkillsNursery(id);
- if(c.track==="phonics")return tabSkillsPhonics(id);
+ if(c.track==="nursery")return tabSkillsNursery(id)+projectsSection(c);
+ if(c.track==="phonics")return tabSkillsPhonics(id)+projectsSection(c);
  const items=trackItems(c);const skl=STATE.skills[id]||{};
  const periodTabs=items.map((it,i)=>{const done=skl[i]&&Object.keys(skl[i]).length;return `<button class="unit-tab ${CUR_PERIOD===i?'active':''} ${done?'done':''}" onclick="setPeriod(${i},'${id}')">${esc(it)}${done?' ✓':''}</button>`;}).join('');
  const ud=skl[CUR_PERIOD]||{};
@@ -1447,15 +1447,14 @@ function tabSkills(id){
      return `<td><select class="att-sel" onchange="setSkill('${id}',${CUR_PERIOD},${si},'${esc(s)}',this.value)">${RATING.map(r=>`<option ${r===v?'selected':''}>${r}</option>`).join('')}</select></td>`;}).join('')}</tr>`;}).join('')}
    </table></div>`;
  // competencies for the SELECTED unit/period (from the Cambridge book table; changes per unit)
- const uc=UNIT_COMPETENCIES[c.level];
  let compTitle,compHtml;
- if(uc && c.track==='units'){
-   const un=String(CUR_PERIOD+1);const udc=(uc.units||{})[un];
+ if(c.track==='units'){
+   const un=CUR_PERIOD+1;const udc=unitCompMerged(c.level,un);const keys=set.filter(s=>udc[s]&&udc[s].length);
    compTitle=`📚 Unit ${un} — skills & competencies`;
-   if(udc){
-     compHtml=set.filter(s=>udc[s]&&udc[s].length).map(s=>`<div class="comp"><h5>🎯 ${esc(s)}</h5><ul>${udc[s].map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
+   if(keys.length){
+     compHtml=keys.map(s=>`<div class="comp"><h5>🎯 ${esc(s)}</h5><ul>${udc[s].map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
    }else{
-     compHtml=`<div class="flag warn"><span class="fi">📝</span><div>The competencies for <b>Unit ${un}</b> haven't been added yet — they'll be filled in as the class reaches this unit.</div></div>`;
+     compHtml=`<div class="flag warn"><span class="fi">📝</span><div>The competencies for <b>Unit ${un}</b> haven't been added yet — coordination can add them in 🎯 Skills &amp; Competencies.</div></div>`;
    }
  }else{
    const comps=COMPETENCIES[c.level]||{};compTitle=`📚 What this class develops`;
@@ -1470,7 +1469,7 @@ function tabSkills(id){
    <div class="no-print" style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn" onclick="saveAssessment('${id}','Assessment')">💾 Save assessment</button> <span class="muted small">Ratings save as you change them; click to confirm — shows in the student report.</span></div></div>
   <div class="card"><h3>${compTitle}</h3>
    <p class="hint">General criteria from the book — every child in this ${esc(trackName(c).toLowerCase())} is assessed against these. Select another ${esc(trackName(c).toLowerCase())} above to see its competencies.</p>
-   ${compHtml||'<p class="muted small">—</p>'}</div>`;
+   ${compHtml||'<p class="muted small">—</p>'}</div>`+projectsSection(c);
 }
 function tabSkillsSimple(id){
  const c=getClass(id);
@@ -2015,6 +2014,11 @@ function pjDraftSave(){if(!PJ_DRAFT)return;pjSyncName();const d=PJ_DRAFT;const n
 function deleteProject(lvl,pid){if(!confirm('Delete this project and its skills?'))return;STATE.projects=STATE.projects||{};STATE.projects[lvl]=(STATE.projects[lvl]||[]).filter(x=>x.id!==pid);save();toast('🗑 Project deleted');renderCoord();}
 /* Units added by coordination (K1+ only), competencies organised by skill. Pre-formatted units are never touched. */
 function levelUnits(lvl){STATE.unitsAdd=STATE.unitsAdd||{};return STATE.unitsAdd[lvl]||[];}
+/* merge the pre-formatted unit competencies (never changed) with coordination-added ones, for a given unit number */
+function unitCompMerged(level,unitNum){const out={};const uc=(typeof UNIT_COMPETENCIES!=='undefined'&&UNIT_COMPETENCIES[level]&&UNIT_COMPETENCIES[level].units)||{};const pre=uc[String(unitNum)]||{};Object.keys(pre).forEach(s=>{if(pre[s]&&pre[s].length)out[s]=pre[s].slice();});((STATE.unitsAdd||{})[level]||[]).forEach(cu=>{if(Number(cu.unit)===Number(unitNum)&&cu.byskill){Object.keys(cu.byskill).forEach(s=>{if(cu.byskill[s]&&cu.byskill[s].length)out[s]=(out[s]||[]).concat(cu.byskill[s]);});}});return out;}
+/* coordination Projects shown read-only in the class Skills tab (and report) */
+function projectsSection(c){if(!c||c.fluent||c.special==='cambridge')return '';const ps=levelProjects(c.level);if(!ps.length)return '';return `<div class="card"><h3>🎨 Projects</h3><p class="hint">Project-based skills for this level, set by coordination.</p>${ps.map(p=>`<div class="comp" style="border-color:var(--green)"><h5>📌 ${esc(p.name)}</h5>${p.skills&&p.skills.length?`<ul style="margin:4px 0 0 18px">${p.skills.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:''}</div>`).join('')}</div>`;}
+function reportProjects(cid){const c=getClass(cid);if(!c)return '';const ps=levelProjects(c.level);if(!ps.length)return '';return `<hr class="sep"><h3>🎨 Projects</h3>${ps.map(p=>`<div class="comp" style="border-color:var(--green)"><h5>📌 ${esc(p.name)}</h5>${p.skills&&p.skills.length?`<ul>${p.skills.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:''}</div>`).join('')}`;}
 let UN_DRAFT=null;
 function addUnitModal(lvl,uid){const u=uid?levelUnits(lvl).find(x=>x.id===uid):null;const byskill={};(SKILLSETS[lvl]||['Listening','Speaking','Reading','Writing']).forEach(s=>{byskill[s]=(u&&u.byskill&&u.byskill[s])?u.byskill[s].slice():[];});UN_DRAFT={lvl:lvl,uid:uid||null,unit:(u&&u.unit)?u.unit:1,byskill:byskill};renderUnitModal();}
 function addUnitModalPending(){if(!UN_DRAFT)return;UN_DRAFT.pending=UN_DRAFT.pending||{};(SKILLSETS[UN_DRAFT.lvl]||[]).forEach(s=>{const sid=s.replace(/[^a-zA-Z0-9]/g,'_');const el=$("#un_in_"+sid);if(el)UN_DRAFT.pending[s]=el.value;});}
@@ -2537,6 +2541,7 @@ function progressReport(cid,name,opts){
    ${personalizedLessonsCard(cid,name)}
    ${actionFollowupsCard(cid,name)}
    ${pedagogicalOrientationCard(cid,name)}
+   ${reportProjects(cid)}
    ${bare?'':`<hr class="sep"><h3>🗒️ Coordination notes <span class="muted small" style="font-weight:600">(saved to the child's history)</span></h3>
    <p class="hint">Notes by coordination about the child — conversations with parents, teachers or staff. Each note is timestamped and kept in the child's history.</p>`}
    ${(()=>{if(bare)return '';const ns=coordNotesOf(cid,name);return ns.length?`<div style="margin-bottom:10px">${ns.slice().reverse().map(o=>`<div class="comp" style="border-color:var(--purple)"><h5>🗒️ ${esc(fmtTs(o.ts))} <button class="btn ghost sm no-print" style="float:right;padding:2px 8px" onclick="delCoordNote('${cid}','${esc(name).replace(/'/g,"\\'")}','${o.ts}')">🗑</button></h5><div class="small">${esc(o.text)}</div></div>`).join('')}</div>`:'<p class="muted small">No coordination notes yet.</p>';})()}
