@@ -2294,7 +2294,7 @@ function renderCoord(){
  else if(COORD_TAB==='teachers')b.innerHTML=coordTeachers();
  else if(COORD_TAB==='attention')b.innerHTML=coordAttention();
  else if(COORD_TAB==='follow')b.innerHTML=coordActionsPanel();
- else if(COORD_TAB==='reports'){b.innerHTML=coordReports();if(!RPT.cid)fillRptStudents();}
+ else if(COORD_TAB==='reports'){b.innerHTML=coordReports();if(!RPT.cid){fillRptStudents();fillRptStudentsP();}}
  else if(COORD_TAB==='messages')b.innerHTML=coordMessages();
  else if(COORD_TAB==='birthdays')b.innerHTML=coordBirthdays();
  else if(COORD_TAB==='trials')b.innerHTML=coordTrials();
@@ -2441,12 +2441,17 @@ function coordAttention(){
 /* PROGRESS REPORTS + specialist narrative for Lidiane */
 let RPT={cid:null,name:null};
 function coordReports(){
- if(RPT.cid)return progressReport(RPT.cid,RPT.name);
+ if(RPT.cid)return RPT.mode==='parent'?parentReportFull():progressReport(RPT.cid,RPT.name);
  return `<div class="card"><h3>📄 Progress reports — Coordination</h3>
    <p class="hint">The coordinator's detailed development summary per child — specialist analysis, attendance, skills, tests and follow-ups. Pick a class and a student (or “All students”), then print / save as PDF.</p>
    <div class="row c2"><div><label class="fl">Class</label><select class="inp" id="rp_class" onchange="fillRptStudents()">${CLASSES.map(c=>`<option value="${c.id}">${esc(c.name)} ${esc(c.time)} — ${esc(c.teacher)}</option>`).join('')}</select></div>
    <div><label class="fl">Student</label><select class="inp" id="rp_stu"></select></div></div>
-   <button class="btn" onclick="openReport($('#rp_class').value,$('#rp_stu').value)">📄 Generate report</button></div>`;
+   <button class="btn" onclick="openReport($('#rp_class').value,$('#rp_stu').value)">📄 Generate report</button></div>
+  <div class="card" style="border-color:var(--green)"><h3>👨‍👩‍👧 Progress report — Parents</h3>
+   <p class="hint">A warm, parent-friendly version — only what the family needs to know, ready to print or send (logo + Progress Report header, full name, age, teacher, a gentle overview, attendance, skills, tests, highlights, extra activities and a neuroscience note). Pick a class and a student (or “All students”).</p>
+   <div class="row c2"><div><label class="fl">Class</label><select class="inp" id="rp_class_p" onchange="fillRptStudentsP()">${CLASSES.filter(c=>!c.fluent&&c.special!=='cambridge').map(c=>`<option value="${c.id}">${esc(c.name)} ${esc(c.time)} — ${esc(c.teacher)}</option>`).join('')}</select></div>
+   <div><label class="fl">Student</label><select class="inp" id="rp_stu_p"></select></div></div>
+   <button class="btn" style="background:var(--green);border-color:var(--green)" onclick="openReportParent($('#rp_class_p').value,$('#rp_stu_p').value)">👨‍👩‍👧 Generate parent report</button></div>`;
 }
 function fillRptStudents(){const c=getClass($("#rp_class").value);if(!c)return;$("#rp_stu").innerHTML='<option value="__ALL__">🧑‍🎓 All students (one document)</option>'+c.students.map(s=>`<option>${esc(s)}</option>`).join('');}
 function openReport(cid,name){RPT={cid,name};COORD_OK=true;COORD_TAB='reports';renderCoord();}
@@ -2586,6 +2591,91 @@ function openReportPrint(title,html){
 }
 function printOneReport(cid,name){openReportPrint('Progress Report — '+displayName(cid,name),reportBlock(cid,name));}
 function printAllReports(cid){const c=getClass(cid);openReportPrint('Progress Reports — '+(c?c.name+' '+c.time:''),reportBlocks(cid));}
+/* ===== PARENT progress report — warm, reduced, print-ready. Synthesised (no "AI" labels), gentle tone. ===== */
+function parentHeader(){const logo=(document.querySelector('.logo-img')||{}).src||'';return `<div style="display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--green);padding-bottom:14px;margin-bottom:16px">${logo?`<img src="${logo}" style="height:54px;width:auto">`:'<div></div>'}<div style="margin-left:auto;text-align:right"><h2 style="margin:0;color:var(--navy)">Progress Report</h2><div class="muted small">Neuroscience-based bilingual education</div></div></div>`;}
+function parentFirst(cid,name){return (displayName(cid,name)||name).split(' ')[0];}
+function parentOverall(cid,name){const st=studentStats(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const f=parentFirst(cid,name);
+ let s=`${f} is developing well and engaging with English in a natural, joyful way`;
+ if(prof.length)s+=`, showing real confidence in ${prof.slice(0,3).join(', ')}`;
+ s+='.';
+ if(dev.length)s+=` With gentle, playful practice in ${dev.slice(0,2).join(' and ')}, ${f} will keep growing steadily — exactly as we expect at this stage.`;
+ return esc(s);}
+function parentOverviewBullets(cid,name){const st=studentStats(cid,name);const prof=strongSkills(cid,name);const B=[];
+ if(st.attRate!=null)B.push(`<b>Attendance:</b> ${st.attRate}% — ${st.attRate>=90?'wonderful, consistent presence in class.':st.attRate>=75?'good presence in class.':'every class is a precious chance to keep growing.'}`);
+ if(prof.length)B.push(`<b>Confident in:</b> ${prof.map(esc).join(', ')}.`);
+ B.push(`<b>Overall:</b> ${parentOverall(cid,name)}`);
+ return B;}
+function parentTestsSection(cid,name,tests){const c=getClass(cid);if(!hasTests(c))return '';
+ const rows=tests.filter(t=>t.score!=null||t.level).map(t=>`<tr><td>${esc(t.u)}</td><td>${esc(t.level||'Basic')}</td><td>${t.score==null?'—':esc(t.score)}</td></tr>`).join('');
+ if(!rows)return '';
+ return `<hr class="sep"><h3>🧪 ${esc(testName(c))}s</h3><div class="tbl-wrap"><table><tr><th>${esc(testName(c))}</th><th>Level</th><th>Score</th></tr>${rows}</table></div>${parentBelowAnalysis(cid,name,tests)}`;}
+function parentBelowAnalysis(cid,name,tests){const low=tests.filter(t=>t.score!=null&&Number(t.score)<6);if(!low.length)return '';
+ let reasons='';low.forEach(t=>{if(t.feedback&&String(t.feedback).trim())reasons+=' '+t.feedback;});
+ try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs&&NEG_RE.test(r.obs))reasons+=' '+r.obs;});}catch(e){}
+ const blob=reasons.toLowerCase();const f=parentFirst(cid,name);let theme='';
+ if(/late|atras|arriv|miss/.test(blob))theme='arriving a little late and missing the start of some activities';
+ else if(/distract|focus|atten/.test(blob))theme='a few moments of distraction during the task';
+ else if(/understand|confus|instruct|didn'?t|did not/.test(blob))theme='needing the instructions explained once more before starting';
+ else if(/absen/.test(blob))theme='a couple of absences that briefly interrupted the routine';
+ const msg=`On one of the recent assessments, ${f} scored a little below the usual. Looking back at the class notes, this seems linked to ${theme||'a tricky moment with the material that day'} — nothing to worry about. With a calm review at home and our continued support in class, ${f} will quickly get back on track; this is a normal part of learning.`;
+ return `<div class="flag warn" style="margin-top:8px"><span class="fi">💡</span><div>${esc(msg)}</div></div>`;}
+function parentHighlights(cid,name){const H=synthHighlights(cid,name);const f=parentFirst(cid,name);
+ if(H.strengths&&H.strengths.length)return `<ul style="margin:0 0 0 18px">${H.strengths.map(o=>`<li>${esc(o.obs)}</li>`).join('')}</ul>`;
+ const prof=strongSkills(cid,name);
+ if(prof.length)return `<ul style="margin:0 0 0 18px"><li>${f} shows real confidence in ${esc(prof.slice(0,3).join(', '))}.</li><li>${f} engages with English in a joyful, natural way and loves taking part in class.</li></ul>`;
+ return `<p class="muted small">${f} is settling in beautifully — more highlights will appear as the term continues.</p>`;}
+function parentExtraActivities(cid,name){const f=parentFirst(cid,name);let blocks='';
+ let cl=null;try{cl=cambLevelOf(name);}catch(e){}
+ if(cl){let b=null;try{b=cambBand(name);}catch(e){}blocks+=`<div class="comp" style="border-color:var(--purple)"><h5>🎓 Cambridge Preparation — ${esc(cl)}</h5><p class="small">${f} takes part in our official Cambridge preparation programme at <b>${esc(cl)}</b> level, building exam confidence and strengthening listening, reading, writing and speaking through structured, supportive practice. ${b?'Practice results show steady, encouraging progress.':'A wonderful commitment and a positive attitude towards this journey.'}</p></div>`;}
+ let inFluent=false;try{inFluent=((getClass('fluent_steps')||{}).slots||[]).some(sl=>fluentRoster(sl).includes(name));}catch(e){}
+ if(inFluent)blocks+=`<div class="comp" style="border-color:#FF914D"><h5>🗣️ Fluent Steps — conversation club</h5><p class="small">${f} also joins our Monday <b>Fluent Steps</b> conversation club — an extra, relaxed space to speak English freely. This nurtures oral confidence, spontaneity and a genuine love of communicating in English.</p></div>`;
+ if(!blocks)return '';
+ return `<hr class="sep"><h3>✨ Extra activities</h3>${blocks}`;}
+function parentNeuroComment(cid,name){const c=getClass(cid);const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const young=["Nursery","Kinder","KinderPlus","K1"].includes(c.level);
+ let s=`At Kids Garden, ${f} learns English the way the brain learns best — through meaningful, playful and repeated experiences rather than memorisation. `;
+ if(prof.length)s+=`The confident growth in ${prof.slice(0,3).join(', ')} tells us the language is becoming natural and automatic for ${f}. `;
+ if(young)s+=`At this age the brain is wonderfully receptive to sounds and patterns, so every song, game and gesture helps English settle deeply and joyfully. `;
+ else s+=`As the brain consolidates language through varied, spaced practice, ${f}'s skills are gradually moving from effort into ease. `;
+ if(dev.length)s+=`A gentle, encouraging focus on ${dev.slice(0,2).join(' and ')} — always with warmth and never pressure — will keep this growth steady, because a calm, confident mind is what truly unlocks learning. `;
+ s+=`Overall, ${f} is developing beautifully, and we feel privileged to be part of this journey with your family.`;
+ return esc(s);}
+function parentReportCard(cid,name){
+ const c=getClass(cid);const L=LEVELS[c.level]||{};const st=studentStats(cid,name);const set=SKILLSETS[c.level]||SKILLSETS.K1;
+ const skl=STATE.skills[cid]||{};const skillSummary={};
+ Object.values(skl).forEach(per=>{const r=per[name];if(r)Object.entries(r).forEach(([s,v])=>{if(v&&v!=='Not assessed'){if(v==='Proficient'||skillSummary[s]!=='Proficient')skillSummary[s]=v;}});});
+ const tests=[];const t=STATE.tests[cid]||{};Object.entries(t).forEach(([u,rows])=>{const r=rows.find(x=>x.student===name);if(r)tests.push({u,...r});});
+ const f=parentFirst(cid,name);
+ return `<div class="card rpt-card">
+   ${parentHeader()}
+   <div class="row c2" style="margin-bottom:6px">
+     <div><label class="fl">Student</label><div style="font-size:20px;font-weight:800;color:var(--navy)">${esc(displayName(cid,name))}</div></div>
+     <div><label class="fl">Age</label><div>${esc(c.age||L.age||'')}</div><div style="margin-top:6px"><label class="fl">Teacher</label><div>${esc(c.teacher)}</div></div></div>
+   </div>
+   <div class="muted small">Reflects all logged classes · generated ${todayISO()}</div>
+   <hr class="sep"><h3>🌟 How ${f} is doing</h3>
+   <div class="narr"><ul style="margin:0 0 0 18px">${parentOverviewBullets(cid,name).map(x=>`<li style="margin-bottom:5px">${x}</li>`).join('')}</ul></div>
+   <hr class="sep"><h3>📊 Attendance & engagement</h3>
+   <div class="stat-grid" style="margin-bottom:8px">
+     <div class="stat blue"><div class="n">${st.attRate==null?'—':st.attRate+'%'}</div><div class="l">Attendance</div></div>
+     <div class="stat"><div class="n">${st.seen}</div><div class="l">Classes recorded</div></div></div>
+   <hr class="sep"><h3>🎯 Skills development</h3>
+   ${Object.keys(skillSummary).length?`<div class="tbl-wrap"><table><tr>${set.map(s=>`<th>${esc(s)}</th>`).join('')}</tr><tr>${set.map(s=>{const v=skillSummary[s]||'Not assessed';return `<td><span class="badge ${ratingClass(v)}">${esc(v)}</span></td>`;}).join('')}</tr></table></div>`:'<p class="muted small">Skills will appear after the first assessment.</p>'}
+   ${hasTests(c)?parentTestsSection(cid,name,tests):''}
+   <hr class="sep"><h3>⭐ Highlights</h3>
+   ${parentHighlights(cid,name)}
+   ${parentExtraActivities(cid,name)}
+   <hr class="sep"><h3>🧠 A note on ${f}'s development</h3>
+   <div class="narr">${parentNeuroComment(cid,name)}</div>
+   <hr class="sep"><p class="center muted small">🌱 At Kids Garden we truly care about every child. Thank you for growing with us.</p>
+ </div>`;}
+function parentBlock(cid,n){const c=getClass(cid);return `<table class="rpt-block"><thead><tr><td><div class="rpt-runhead">Progress Report · ${esc(displayName(cid,n))} · ${esc(c.teacher)}</div></td></tr></thead><tbody><tr><td>${parentReportCard(cid,n)}</td></tr></tbody></table>`;}
+function parentReportFull(){const cid=RPT.cid,name=RPT.name;const c=getClass(cid);if(!c)return '';
+ if(name==='__ALL__'){const studs=activeStudents(c);return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParentAll('${cid}')" style="margin-left:8px">🖨 Print all / Save PDF</button> <span class="muted small" style="margin-left:8px">Parent reports — ${studs.length} student${studs.length===1?'':'s'} · one clean A4 page each</span></div>${studs.length?studs.map(n=>parentBlock(cid,n)).join(''):'<div class="card"><p class="muted">No active students.</p></div>'}`;}
+ return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParent('${cid}','${esc(name).replace(/'/g,"\\'")}')" style="margin-left:8px">🖨 Print / Save PDF</button> <span class="muted small" style="margin-left:8px">Parent report</span></div>${parentBlock(cid,name)}`;}
+function printParent(cid,name){openReportPrint('Progress Report — '+displayName(cid,name),parentBlock(cid,name));}
+function printParentAll(cid){const c=getClass(cid);openReportPrint('Progress Reports — '+(c?c.name:''),activeStudents(c).map(n=>parentBlock(cid,n)).join(''));}
+function fillRptStudentsP(){const c=getClass($("#rp_class_p").value);if(!c)return;$("#rp_stu_p").innerHTML='<option value="__ALL__">🧑‍🎓 All students (one document)</option>'+c.students.map(s=>`<option>${esc(s)}</option>`).join('');}
+function openReportParent(cid,name){RPT={cid,name,mode:'parent'};COORD_OK=true;COORD_TAB='reports';renderCoord();}
 function saveNote(cid,name){STATE.notes[cid+'::'+name]=$("#rpt_note").value;save();toast("✅ Note saved");}
 /* ---- Coordination: specialist bullets, highlights, notes log ---- */
 function fluentSpeakingBullets(cid,name){
