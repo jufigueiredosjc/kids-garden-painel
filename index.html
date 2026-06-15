@@ -458,7 +458,7 @@ const SEED_SKILLS={};
 const CLASS_BASE=JSON.parse(JSON.stringify(CLASSES));
 let STATE=load();
 try{applyClassMeta();}catch(e){}
-function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],trials:{},projects:{},tombstones:{}};}
+function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],trials:{},projects:{},unitsAdd:{},tombstones:{}};}
 function load(){
  let s=null;
  try{const r=localStorage.getItem(LS_KEY);if(r)s=JSON.parse(r);}catch(e){}
@@ -514,7 +514,7 @@ function applyTombstones(m){var T=m&&m.tombstones;if(!T)return m;var any=false,k
 function mergeStatesForSave(base,loc){var m={},k;for(k in base)m[k]=base[k];for(k in loc)if(!(k in m))m[k]=loc[k];
  m.sessions=_mSessions(base.sessions||{},loc.sessions||{});m.addedStudents=_mAdded(base.addedStudents||{},loc.addedStudents||{});
  m.customClasses=_mById(base.customClasses||[],loc.customClasses||[]);m.teacherTasks=_mById(base.teacherTasks||[],loc.teacherTasks||[]);m.taskLog=_mById(base.taskLog||[],loc.taskLog||[]);m.patches=_mUniq(base.patches||[],loc.patches||[]);
- ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','projects'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
+ ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','projects','unitsAdd'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
  m.tombstones=_mObj(base.tombstones||{},loc.tombstones||{});
  return applyTombstones(m);}
 async function cloudSave(){if(!sbClient)return;try{
@@ -1980,6 +1980,7 @@ function coordSkills(){
  const classesOfLevel=CLASSES.filter(c=>c.level===lvl&&!c.fluent&&c.special!=='cambridge');
  const set=SKILLSETS[lvl]||[];
  const projects=levelProjects(lvl);
+ const unitsLevel=classesOfLevel.some(c=>c.track==='units');const units=levelUnits(lvl);
  return `<div class="card"><h3>🎯 Skills &amp; Competencies <span class="muted small">— Coordination</span></h3>
    <p class="hint">Add your own <b>Projects</b> (with their skills) per level, as an extra group — full autonomy to create, edit and delete. The existing unit/phonics competencies are kept exactly as they are; nothing of the units is changed here. Classes of the same level share the framework (e.g. K4 AM &amp; K4 PM).</p>
    <div class="row c2"><div><label class="fl">Level</label><select class="inp" id="csk_level" onchange="COORD_SKILL_LEVEL=this.value;renderCoord()">${levels.map(l=>`<option value="${esc(l)}" ${l===lvl?'selected':''}>${esc(l)}${LEVELS[l]?' ('+esc(LEVELS[l].age)+')':''}</option>`).join('')}</select></div>
@@ -1988,7 +1989,11 @@ function coordSkills(){
   <div class="card"><h3>🎨 Projects — ${esc(lvl)} <button class="btn orange sm no-print" style="float:right" onclick="addProjectModal('${esc(lvl)}')">➕ Add project</button></h3>
    <p class="hint">Each project has its own skills/competencies. Follow the can-do writing style (e.g. “Uses project vocabulary in short sentences”).</p>
    ${projects.length?projects.map(p=>`<div class="comp" style="border-color:var(--green)"><h5>📌 ${esc(p.name)} <span class="no-print" style="float:right;font-weight:600"><button class="btn ghost sm" onclick="addProjectModal('${esc(lvl)}','${p.id}')">✏️ Edit</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteProject('${esc(lvl)}','${p.id}')">🗑 Delete</button></span></h5>${p.skills&&p.skills.length?`<ul style="margin:4px 0 0 18px">${p.skills.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:'<p class="muted small">No skills added yet.</p>'}</div>`).join(''):'<p class="muted small">No projects yet. Click “➕ Add project” to create one.</p>'}
-  </div>`;
+  </div>
+  ${unitsLevel?`<div class="card"><h3>📚 Units — ${esc(lvl)} <button class="btn sm no-print" style="float:right;background:#2C6FB0;border-color:#2C6FB0;color:#fff" onclick="addUnitModal('${esc(lvl)}')">➕ Add unit</button></h3>
+   <p class="hint">Add a unit and its competencies organised by skill (${esc((SKILLSETS[lvl]||[]).join(', '))}). The pre-formatted units already in the system stay untouched.</p>
+   ${units.length?units.map(u=>`<div class="comp" style="border-color:#2C6FB0"><h5>📚 ${esc(u.name)} <span class="no-print" style="float:right;font-weight:600"><button class="btn ghost sm" onclick="addUnitModal('${esc(lvl)}','${u.id}')">✏️ Edit</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteUnit('${esc(lvl)}','${u.id}')">🗑 Delete</button></span></h5>${(SKILLSETS[lvl]||[]).filter(s=>u.byskill&&u.byskill[s]&&u.byskill[s].length).map(s=>`<div style="margin-top:4px"><b class="small">🎯 ${esc(s)}</b><ul style="margin:2px 0 0 18px">${u.byskill[s].map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')||'<p class="muted small">No competencies added yet.</p>'}</div>`).join(''):'<p class="muted small">No units added yet. Click “➕ Add unit”.</p>'}
+  </div>`:''}`;
 }
 function addProjectModal(lvl,pid){
  const list=levelProjects(lvl);const p=pid?list.find(x=>x.id===pid):null;
@@ -2011,6 +2016,31 @@ function saveProject(lvl,pid){
  save();const m=document.getElementById('pjmodal');if(m)m.remove();toast('✅ Project published');renderCoord();
 }
 function deleteProject(lvl,pid){if(!confirm('Delete this project and its skills?'))return;STATE.projects=STATE.projects||{};STATE.projects[lvl]=(STATE.projects[lvl]||[]).filter(x=>x.id!==pid);save();toast('🗑 Project deleted');renderCoord();}
+/* Units added by coordination (K1+ only), competencies organised by skill. Pre-formatted units are never touched. */
+function levelUnits(lvl){STATE.unitsAdd=STATE.unitsAdd||{};return STATE.unitsAdd[lvl]||[];}
+function addUnitModal(lvl,uid){
+ const list=levelUnits(lvl);const u=uid?list.find(x=>x.id===uid):null;
+ const skills=SKILLSETS[lvl]||['Listening','Speaking','Reading','Writing'];
+ const ex=document.getElementById('unmodal');if(ex)ex.remove();
+ const fields=skills.map(s=>{const sid=s.replace(/[^a-zA-Z0-9]/g,'_');const val=(u&&u.byskill&&u.byskill[s])?esc(u.byskill[s].join('\n')):'';return `<label class="fl" style="margin-top:8px">🎯 ${esc(s)} <span class="muted small">(one per line)</span></label><textarea class="inp" id="un_${sid}" rows="3">${val}</textarea>`;}).join('');
+ const w=document.createElement('div');w.id='unmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box" style="border-color:#2C6FB0;max-width:600px;text-align:left;max-height:88vh;overflow:auto"><h2 style="color:var(--navy);font-size:19px">${u?'✏️ Edit unit':'➕ New unit'} — ${esc(lvl)}</h2>
+   <label class="fl">Unit name</label><input class="inp" id="un_name" value="${u?esc(u.name):''}" placeholder="e.g. Unit 5 — My Family">
+   ${fields}
+   <div style="margin-top:12px"><button class="btn" onclick="saveUnit('${esc(lvl)}',${u?`'${u.id}'`:'null'})">💾 Save &amp; publish</button>
+   <button class="btn ghost" onclick="document.getElementById('unmodal').remove()">Cancel</button></div></div>`;
+ document.body.appendChild(w);setTimeout(()=>{const e=$("#un_name");if(e)e.focus();},40);
+}
+function saveUnit(lvl,uid){
+ const nameEl=$("#un_name");const name=nameEl?String(nameEl.value).trim():'';if(!name){toast('✍️ Give the unit a name');return;}
+ const skills=SKILLSETS[lvl]||['Listening','Speaking','Reading','Writing'];const byskill={};
+ skills.forEach(s=>{const sid=s.replace(/[^a-zA-Z0-9]/g,'_');const el=$("#un_"+sid);const lines=(el?String(el.value):'').split('\n').map(x=>x.trim()).filter(Boolean);if(lines.length)byskill[s]=lines;});
+ STATE.unitsAdd=STATE.unitsAdd||{};STATE.unitsAdd[lvl]=STATE.unitsAdd[lvl]||[];
+ if(uid&&uid!=='null'){const u=STATE.unitsAdd[lvl].find(x=>x.id===uid);if(u){u.name=name;u.byskill=byskill;}}
+ else{STATE.unitsAdd[lvl].push({id:'un_'+Math.random().toString(36).slice(2,9),name:name,byskill:byskill});}
+ save();const m=document.getElementById('unmodal');if(m)m.remove();toast('✅ Unit published');renderCoord();
+}
+function deleteUnit(lvl,uid){if(!confirm('Delete this unit and its competencies?'))return;STATE.unitsAdd=STATE.unitsAdd||{};STATE.unitsAdd[lvl]=(STATE.unitsAdd[lvl]||[]).filter(x=>x.id!==uid);save();toast('🗑 Unit deleted');renderCoord();}
 function coordStructure(){
  const rows=CLASSES.map(c=>{const L=LEVELS[c.level]||{};const custom=(STATE.customClasses||[]).some(x=>x.id===c.id);
   return `<tr><td><b>${esc(c.name)}</b> <span class="muted small">${esc(c.time||'')}</span>${custom?' <span class="badge b-na">added</span>':''}</td>
