@@ -2042,7 +2042,7 @@ function skillSetFor(key){return SKILLSETS[skillLevelOf(key)]||[];}
 function unitSkillsFor(key){const s=skillSetFor(key);return s.length?s:['Listening','Speaking','Reading','Writing'];}
 function skillStructureLabel(lvl){if(lvl==='Nursery')return 'By project (developmental domains)';if(lvl==='Kinder'||lvl==='KinderPlus')return 'Project + Phonics';if(lvl==='Private')return '1:1 (no fixed framework)';return 'By unit';}
 function coordSkills(){
- const names=[...new Set(CLASSES.filter(c=>!c.fluent&&c.special!=='cambridge').map(c=>c.name))];
+ const names=[...new Set(sortedClasses().filter(c=>!c.fluent&&c.special!=='cambridge').map(c=>c.name))];
  if(!names.length)return '<div class="card"><p class="muted">No classes to manage.</p></div>';
  if(!COORD_SKILL_LEVEL||!names.includes(COORD_SKILL_LEVEL))COORD_SKILL_LEVEL=names[0];
  const lvl=COORD_SKILL_LEVEL;
