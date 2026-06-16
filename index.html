@@ -1111,9 +1111,74 @@ function cambBandCard(name){
   </div>`;
 }
 
+/* ===== Cambridge Prep — Extra Activity: weekly extra exercises tracked per candidate, with auto-updating analysis. ===== */
+function cambExtraAll(){const cs=cambState();cs.extra=cs.extra||{};return cs.extra;}
+function cambExtraOf(name){return (cambExtraAll()[name]||[]).slice().sort((a,b)=>(b.delivered||'').localeCompare(a.delivered||''));}
+function cambExtraParticipants(){const e=cambExtraAll();return Object.keys(e).filter(n=>(e[n]||[]).length);}
+function ceFmt(d){if(!d)return '';try{const x=new Date(d);if(isNaN(x))return d;return x.toLocaleDateString('en-GB',{day:'2-digit',month:'short',timeZone:'UTC'});}catch(e){return d;}}
+function cambSkillOf(part){const p=(part||'').toLowerCase();if(p.indexOf('listen')>=0)return 'Listening';if(p.indexOf('speak')>=0)return 'Speaking';if(p.indexOf('use of english')>=0)return 'Use of English';if(p.indexOf('read')>=0||p.indexOf('writing')>=0)return 'Reading & Writing';return (part||'Other');}
+function cambExtraAnalysis(name){const acts=cambExtraOf(name);if(!acts.length)return '';
+ const bySkill={};let totalParts=0,allErrors='';
+ acts.forEach(a=>(a.parts||[]).forEach(p=>{totalParts++;const sk=cambSkillOf(p.part);bySkill[sk]=bySkill[sk]||{count:0,err:0};bySkill[sk].count++;if(p.errors&&String(p.errors).trim()){bySkill[sk].err++;allErrors+=' '+p.errors;}}));
+ if(!totalParts)return '';
+ const f=((displayName('cambridge_prep',name)||name)+'').split(' ')[0];
+ const skills=Object.keys(bySkill);const weak=skills.filter(s=>bySkill[s].err>0).sort((x,y)=>bySkill[y].err-bySkill[x].err);const strong=skills.filter(s=>bySkill[s].err===0&&bySkill[s].count>0);
+ let s=`Across ${acts.length} exercise${acts.length>1?'s':''} (${totalParts} part${totalParts>1?'s':''}), `;
+ if(weak.length){s+=`${f} has the most to work on in ${weak.slice(0,2).join(' and ')}`;const blob=allErrors.toLowerCase();const th=[];
+   if(/spell/.test(blob))th.push('spelling');if(/tense|verb|grammar|past|present/.test(blob))th.push('verb tenses');if(/vocab|word/.test(blob))th.push('vocabulary');if(/prepos/.test(blob))th.push('prepositions');if(/instruction|read the|did ?n.?t|understand/.test(blob))th.push('reading the instructions carefully');if(/plural|singular/.test(blob))th.push('plurals');
+   if(th.length)s+=`, especially ${th.slice(0,2).join(' and ')}`;s+='. ';
+ }else{s+=`${f} is completing the exercises well, with very few errors so far. `;}
+ if(strong.length)s+=`Consistent and strong in ${strong.slice(0,2).join(' and ')}. `;
+ s+=`Keep reinforcing the weaker parts in the next exercises and review them together; if the same errors keep appearing, it is worth a quick note to the family.`;
+ return esc(s);}
+function cambExtra(id){const parts=cambExtraParticipants();
+ return `<div class="card"><h3>🏋️ Extra Activity <button class="btn orange sm no-print" style="float:right" onclick="cambExtraAddModal()">➕ Add exercise</button></h3>
+   <p class="hint">Weekly extra exercises for the candidates we are following until classes resume (delivered one week, returned the next). Log the corrected parts (e.g. “Listening Part 1”) and the errors noted; the analysis updates as you go, so we can see where to improve and alert the family if needed. It also appears in the child's Cambridge report.</p></div>
+   ${parts.length?parts.map(cambExtraStudentCard).join(''):'<div class="card"><p class="muted">No extra exercises logged yet. Click “➕ Add exercise” to start.</p></div>'}`;}
+function cambExtraStudentCard(name){const acts=cambExtraOf(name);const an=cambExtraAnalysis(name);
+ return `<div class="card" style="border-color:var(--purple)"><h3 style="color:var(--purple)">🎓 ${esc(displayName('cambridge_prep',name))} <span class="muted small">${esc(cambLevelOf(name)||(acts[0]&&acts[0].level)||'')}</span></h3>
+   ${an?`<div class="flag ok"><span class="fi">📈</span><div><b>Where to improve:</b> ${an}</div></div>`:''}
+   ${acts.map(a=>cambExtraActivityHtml(name,a)).join('')||'<p class="muted small">No exercises yet.</p>'}</div>`;}
+function cambExtraActivityHtml(name,a){const ns=esc(name).replace(/'/g,"\\'");
+ return `<div class="comp" style="border-color:#2C6FB0;margin-top:8px"><h5>📦 Delivered ${esc(ceFmt(a.delivered))} · Returned ${a.returned?esc(ceFmt(a.returned)):'<span class="muted">pending</span>'} <span class="muted small">${esc(a.level||'')}</span> <span class="no-print" style="float:right;font-weight:600"><button class="btn ghost sm" onclick="cambExtraAddModal('${ns}','${a.id}')">✏️</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="cambExtraDel('${ns}','${a.id}')">🗑</button></span></h5>
+   ${(a.parts||[]).map(p=>`<div style="margin-top:5px"><b class="small">${esc(p.part)}</b>${p.errors?`<div class="small" style="white-space:pre-wrap">${esc(p.errors)}</div>`:''}</div>`).join('')||'<p class="muted small">No parts logged.</p>'}</div>`;}
+function cambExtraDel(name,aid){if(!confirm('Delete this exercise?'))return;const e=cambExtraAll();e[name]=(e[name]||[]).filter(x=>x.id!==aid);if(!e[name].length)delete e[name];save();toast('🗑 Deleted');renderClass('cambridge_prep');}
+function cambExtraReportCard(name){const acts=cambExtraOf(name);if(!acts.length)return '';const an=cambExtraAnalysis(name);
+ return `<hr class="sep"><h3>🏋️ Extra Activity (Cambridge)</h3>${an?`<div class="flag ok"><span class="fi">📈</span><div><b>Where to improve:</b> ${an}</div></div>`:''}${acts.map(a=>`<div class="comp" style="border-color:#2C6FB0;margin-top:6px"><h5>📦 ${esc(ceFmt(a.delivered))} → ${a.returned?esc(ceFmt(a.returned)):'pending'} <span class="muted small">${esc(a.level||'')}</span></h5>${(a.parts||[]).map(p=>`<div style="margin-top:4px"><b class="small">${esc(p.part)}</b>${p.errors?`<div class="small" style="white-space:pre-wrap">${esc(p.errors)}</div>`:''}</div>`).join('')}</div>`).join('')}`;}
+let CE_DRAFT=null;
+function cambExtraAddModal(name,aid){const acts=name?cambExtraOf(name):[];const a=aid?acts.find(x=>x.id===aid):null;
+ CE_DRAFT={name:name||'',aid:aid||null,level:a?a.level:'Movers',delivered:a?a.delivered:todayISO(),returned:a?(a.returned||''):'',parts:a&&a.parts?JSON.parse(JSON.stringify(a.parts)):[],pPart:'',pErr:''};renderCambExtraModal();}
+function ceSyncTop(){if(!CE_DRAFT)return;const st=$('#ce_student');if(st&&!CE_DRAFT.aid)CE_DRAFT.name=st.value;const lv=$('#ce_level');if(lv)CE_DRAFT.level=lv.value;const dd=$('#ce_deliv');if(dd)CE_DRAFT.delivered=dd.value;const rd=$('#ce_ret');if(rd)CE_DRAFT.returned=rd.value;const pp=$('#ce_part');if(pp)CE_DRAFT.pPart=pp.value;const pe=$('#ce_err');if(pe)CE_DRAFT.pErr=pe.value;}
+function renderCambExtraModal(){if(!CE_DRAFT)return;const d=CE_DRAFT;const ex=document.getElementById('cemodal');if(ex)ex.remove();
+ const roster=[];CAMB_LEVELS.forEach(l=>cambRoster(l).forEach(n=>{if(!roster.includes(n))roster.push(n);}));
+ const stuField=d.aid?`<input class="inp" value="${esc(displayName('cambridge_prep',d.name)||d.name)}" disabled>`:`<select class="inp" id="ce_student"><option value="">— pick a candidate —</option>${roster.map(n=>`<option value="${esc(n).replace(/"/g,'&quot;')}" ${n===d.name?'selected':''}>${esc(displayName('cambridge_prep',n))} (${esc(cambLevelOf(n)||'?')})</option>`).join('')}</select>`;
+ const items=d.parts.length?d.parts.map((p,i)=>`<div class="comp" style="border-color:#2C6FB0;margin:4px 0;padding:6px 9px"><b class="small">${esc(p.part)}</b> <button class="btn ghost sm no-print" style="float:right;color:var(--bad)" onclick="ceDelPart(${i})">🗑</button>${p.errors?`<div class="small" style="white-space:pre-wrap">${esc(p.errors)}</div>`:''}</div>`).join(''):'<p class="muted small">No parts added yet.</p>';
+ const lvOpts=['Starters','Movers','Flyers'].map(l=>`<option ${d.level===l?'selected':''}>${l}</option>`).join('');
+ const w=document.createElement('div');w.id='cemodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box" style="border-color:var(--purple);max-width:680px;width:94vw;text-align:left;max-height:92vh;overflow:auto"><h2 style="color:var(--navy);font-size:19px">🏋️ ${d.aid?'Edit exercise':'New exercise'}</h2>
+   <div class="row c2"><div><label class="fl">Candidate</label>${stuField}</div><div><label class="fl">Level</label><select class="inp" id="ce_level">${lvOpts}</select></div></div>
+   <div class="row c2" style="margin-top:8px"><div><label class="fl">Delivered</label><input class="inp" type="date" id="ce_deliv" value="${esc(d.delivered||'')}"></div><div><label class="fl">Returned</label><input class="inp" type="date" id="ce_ret" value="${esc(d.returned||'')}"></div></div>
+   <label class="fl" style="margin-top:12px">Corrected parts <span class="muted small">(exam part + errors noted)</span></label>
+   ${items}
+   <div style="border-top:1px solid #eee;margin-top:8px;padding-top:8px">
+     <input class="inp" id="ce_part" value="${esc(d.pPart||'')}" placeholder="Exam part, e.g. Listening Part 1">
+     <textarea class="inp" id="ce_err" rows="3" style="margin-top:6px" placeholder="Correction / errors noted (what the child got wrong, what to reinforce)">${esc(d.pErr||'')}</textarea>
+     <button class="btn sm" style="margin-top:6px" onclick="ceAddPart()">➕ Add part</button>
+   </div>
+   <div style="margin-top:14px"><button class="btn" style="background:var(--purple);border-color:var(--purple)" onclick="cambExtraSave()">💾 Save &amp; publish</button> <button class="btn ghost" onclick="CE_DRAFT=null;document.getElementById('cemodal').remove()">Cancel</button></div></div>`;
+ document.body.appendChild(w);}
+function ceAddPart(){if(!CE_DRAFT)return;ceSyncTop();const part=String(CE_DRAFT.pPart||'').trim();if(!part){toast('✍️ Write the exam part (e.g. Listening Part 1)');return;}CE_DRAFT.parts.push({part:part,errors:String(CE_DRAFT.pErr||'').trim()});CE_DRAFT.pPart='';CE_DRAFT.pErr='';renderCambExtraModal();}
+function ceDelPart(i){if(!CE_DRAFT)return;ceSyncTop();CE_DRAFT.parts.splice(i,1);renderCambExtraModal();}
+function cambExtraSave(){if(!CE_DRAFT)return;ceSyncTop();const d=CE_DRAFT;
+ if(String(d.pPart||'').trim()){d.parts.push({part:String(d.pPart).trim(),errors:String(d.pErr||'').trim()});d.pPart='';d.pErr='';}
+ const name=d.name;if(!name){toast('✍️ Pick a candidate');return;}
+ const e=cambExtraAll();e[name]=e[name]||[];
+ if(d.aid){const a=e[name].find(x=>x.id===d.aid);if(a){a.level=d.level;a.delivered=d.delivered;a.returned=d.returned;a.parts=d.parts;}}
+ else{e[name].push({id:'ce_'+Math.random().toString(36).slice(2,9),level:d.level,delivered:d.delivered,returned:d.returned,parts:d.parts,ts:Date.now()});}
+ save();CE_DRAFT=null;const m=document.getElementById('cemodal');if(m)m.remove();toast('✅ Exercise saved');renderClass('cambridge_prep');}
 function renderCambridge(id){
  const c=getClass(id);const L=LEVELS[c.level];cambState();
- const tabs=[['overview','📊 Overview'],['report','📝 Lessons & Homework'],['mocks','🧪 Mock Tests'],['students','🎓 Students by level'],['history','📖 Edit Reports']];
+ const tabs=[['overview','📊 Overview'],['report','📝 Lessons & Homework'],['mocks','🧪 Mock Tests'],['students','🎓 Students by level'],['extra','🏋️ Extra Activity'],['history','📖 Edit Reports']];
  if(!tabs.some(t=>t[0]===CLASS_TAB))CLASS_TAB='overview';
  const total=CAMB_LEVELS.reduce((a,l)=>a+cambRoster(l).length,0);
  app().innerHTML=`
@@ -1127,6 +1192,7 @@ function renderCambridge(id){
  if(CLASS_TAB==='report')b.innerHTML=cambReport(id);
  else if(CLASS_TAB==='mocks')b.innerHTML=cambMocksTab(id);
  else if(CLASS_TAB==='students')b.innerHTML=cambStudents(id);
+ else if(CLASS_TAB==='extra')b.innerHTML=cambExtra(id);
  else if(CLASS_TAB==='history')b.innerHTML=tabEditHistory(id);
  else b.innerHTML=cambOverview(id);
 }
@@ -2543,6 +2609,7 @@ function progressReport(cid,name,opts){
    <hr class="sep">
    ${extraActivitiesCard(cid,name)}
    ${c.special==='cambridge'?cambBandCard(name):''}
+   ${c.special==='cambridge'?cambExtraReportCard(name):''}
    ${personalizedLessonsCard(cid,name)}
    ${actionFollowupsCard(cid,name)}
    ${pedagogicalOrientationCard(cid,name)}
