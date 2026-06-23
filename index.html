@@ -970,7 +970,7 @@ function saveEdit(id,i){try{
  else if(s.personalized){names=_rk;}
  else if(fl){names=fluentRoster(s.slot||c.slots[0]).slice();_rk.forEach(n=>{if(!names.includes(n))names.push(n);});}
  else{names=[...c.students];_rk.forEach(n=>{if(!names.includes(n))names.push(n);});}
- if(obsRequired(c)){const missing=[];names.forEach((n,k)=>{const att=$v('eatt_'+k);const obs=$v('eobs_'+k).trim();const el=$("#eobs_"+k);if(el)el.style.borderColor='';if((att==='Present'||att==='Late')&&obs.length<10){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});if(missing.length){toast('✍️ Observation required for present children: '+missing.join(', '));return;}}
+ if(obsRequired(c)){const missing=[];names.forEach((n,k)=>{const att=$v('eatt_'+k);const obs=$v('eobs_'+k).trim();const el=$("#eobs_"+k);if(el)el.style.borderColor='';if((att==='Present'||att==='Late')&&obs.length<10){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});if(missing.length){const firstK=names.findIndex(n=>missing.includes(displayName(id,n)));missingObsPopup(missing,'eobs_'+firstK);return;}}
  s.date=$v('e_date')||s.date;s.theme=$v('e_theme');s.high=$v('e_high');s.improve=$v('e_improve');
  if(fl&&$("#e_slot"))s.slot=$v('e_slot');
  const ph=c.track==='phonics';
@@ -1460,6 +1460,19 @@ function phonCell(prefix,idx,r){r=r||{};const sk=r.phsk||{};
  return `<td><div class="phsk-wrap">${checks}</div>${sel}</td>`;}
 function readPhonSkills(prefix,idx){const o={};PHONICS_SKILLS.forEach(([k])=>{const el=$("#"+prefix+"sk_"+k+"_"+idx);o[k]=!!(el&&el.checked);});return o;}
 function markAll(val,n){markReportDirty();for(let i=0;i<n;i++){const el=$("#att_"+i);if(el)el.value=val;}}
+/* Clear, hard-to-miss popup when a Present/Late child has no observation — the report is NOT saved
+   until this is fixed. Names the children and takes the teacher straight to the first empty field. */
+function missingObsPopup(names,firstFieldId){const ex=document.getElementById('obspop');if(ex)ex.remove();
+ const w=document.createElement('div');w.id='obspop';w.className='od-overlay';w.style.background='rgba(4,35,66,.5)';
+ const list=(names||[]).map(n=>`<li>${esc(n)}</li>`).join('');
+ w.innerHTML=`<div class="od-box" style="border-color:var(--bad);text-align:left;max-width:480px"><div class="od-ico">✍️</div><h2 style="color:var(--bad);font-size:20px">This report was not saved yet</h2>
+  <p>Every child marked <b>Present</b> or <b>Late</b> needs an observation before the report can be saved.</p>
+  <p style="margin:8px 0 2px"><b>Please add an observation for:</b></p>
+  <ul style="margin:0 0 6px 18px;color:var(--navy);font-weight:600">${list}</ul>
+  <p class="muted small">Tip: if a child was not in class, mark them <b>Absent</b> instead. Then click <b>Save daily report</b> again.</p>
+  <div style="margin-top:12px"><button class="btn" style="background:var(--bad);border-color:var(--bad)" onclick="closeObsPopup('${firstFieldId}')">Got it, take me there</button></div></div>`;
+ document.body.appendChild(w);}
+function closeObsPopup(fid){const m=document.getElementById('obspop');if(m)m.remove();const fe=fid?document.getElementById(fid):null;if(fe){try{fe.focus();fe.scrollIntoView({block:'center'});}catch(e){}}}
 function saveReport(id){try{
  const c=getClass(id);const items=trackItems(c);const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
  const ui=$("#r_unit");const idx=items.length&&ui?Number(ui.value):null;
@@ -1469,9 +1482,7 @@ function saveReport(id){try{
    activeStudents(c).forEach((n,i)=>{const att=$v('att_'+i);const obs=$v('obs_'+i).trim();const el=$("#obs_"+i);
      if(el)el.style.borderColor='';
      if((att==='Present'||att==='Late')&&obs.length<10){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});
-   if(missing.length){toast('✍️ Please write an observation for: '+missing.join(', '));
-     const first=activeStudents(c).findIndex(n=>missing.includes(displayName(id,n)));const fe=$("#obs_"+first);if(fe){try{fe.focus();fe.scrollIntoView({block:'center'});}catch(e){}}
-     return;}
+   if(missing.length){const first=activeStudents(c).findIndex(n=>missing.includes(displayName(id,n)));missingObsPopup(missing,'obs_'+first);return;}
  }
  const entry={date:$v('r_date')||todayISO(),theme:$v('r_theme'),periodIdx:idx,period:idx!=null?items[idx]:'',high:$v('r_high'),improve:$v('r_improve'),rows:{}};
  activeStudents(c).forEach((n,i)=>{const row={att:$v('att_'+i)||'Present',hw:$v('hw_'+i),dollar:c.kidDollar?(Number($v('dol_'+i))||0):0,obs:$v('obs_'+i)};if(c.track==='phonics'&&$("#phon_"+i)){row.phon=$v('phon_'+i);row.phsk=readPhonSkills('phon',i);}entry.rows[n]=row;});
