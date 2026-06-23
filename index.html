@@ -732,7 +732,14 @@ function loggedReports(id){return sessionsOf(id).filter(isRealReport).length;}
 /* ============================================================ ROUTER ============================================================ */
 let VIEW={name:'home'};
 let ALERTED=null,MSG_DISMISSED=new Set(),KD_DISMISSED=new Set();
-function go(name,arg){VIEW={name,arg};if(name!=='coord'){try{stopTrialsPolling();}catch(e){}}if(name!=='class'){ALERTED=null;EDIT_IDX=null;}if(name==='coord'){COORD_OK=false;RPT={};COORD_ACT_POPPED=false;}MSG_DISMISSED=new Set();KD_DISMISSED=new Set();try{window.scrollTo(0,0);}catch(e){}render();}
+/* Unsaved-report guard: a runtime flag only (never touches any history/data). Warns before leaving a report being filled. */
+let REPORT_DIRTY=false,LEAVE_PROCEED=null;
+function markReportDirty(){REPORT_DIRTY=true;}
+function leaveGuard(proceed){const ex=document.getElementById('leavepop');if(ex)ex.remove();LEAVE_PROCEED=proceed;const w=document.createElement('div');w.id='leavepop';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';w.innerHTML=`<div class="od-box" style="border-color:#FF914D"><div class="od-ico">📝</div><h2>Leave without saving?</h2><p>You've started this report but haven't saved it yet. If you leave now, what you typed will be lost.</p><div style="margin-top:10px"><button class="btn ghost" onclick="LEAVE_PROCEED=null;var m=document.getElementById('leavepop');if(m)m.remove();">↩ Keep editing</button> <button class="btn" style="background:var(--bad);border-color:var(--bad)" onclick="doLeave()">🚪 Leave without saving</button></div></div>`;document.body.appendChild(w);}
+function doLeave(){REPORT_DIRTY=false;const m=document.getElementById('leavepop');if(m)m.remove();const fn=LEAVE_PROCEED;LEAVE_PROCEED=null;if(typeof fn==='function')fn();}
+function exitEdit(id){if(REPORT_DIRTY){leaveGuard(function(){EDIT_IDX=null;renderClass(id);});return;}EDIT_IDX=null;renderClass(id);}
+try{window.addEventListener('beforeunload',function(e){if(REPORT_DIRTY){e.preventDefault();e.returnValue='';}});}catch(e){}
+function go(name,arg){if(REPORT_DIRTY){leaveGuard(function(){go(name,arg);});return;}VIEW={name,arg};if(name!=='coord'){try{stopTrialsPolling();}catch(e){}}if(name!=='class'){ALERTED=null;EDIT_IDX=null;}if(name==='coord'){COORD_OK=false;RPT={};COORD_ACT_POPPED=false;}MSG_DISMISSED=new Set();KD_DISMISSED=new Set();try{window.scrollTo(0,0);}catch(e){}render();}
 /* ---- Coordination ↔ Teacher messaging ---- */
 function msgs(cid){STATE.messages=STATE.messages||{};return STATE.messages[cid]||(STATE.messages[cid]=[]);}
 function pendingFor(cid,role){return msgs(cid).filter(m=>m.from!==role&&m.status==='open');}
@@ -885,7 +892,7 @@ function renderClass(id){
  if(trialsForClass(id).some(m=>m.status==='assigned'&&!TRIAL_POPPED.has(m.id))){setTimeout(()=>showTrialTeacherAlert(id),320);}
  LAST_CLASS_ENTERED=id;
 }
-function setTab(t,id){CLASS_TAB=t;CUR_PERIOD=0;EDIT_IDX=null;renderClass(id);}
+function setTab(t,id){if(REPORT_DIRTY){leaveGuard(function(){setTab(t,id);});return;}CLASS_TAB=t;CUR_PERIOD=0;EDIT_IDX=null;renderClass(id);}
 
 /* ---- Edit / add / delete past reports (history correction) ---- */
 let EDIT_IDX=null;
@@ -920,7 +927,7 @@ function addMissedSession(id){const el=$("#add_date");const d=el&&el.value;if(!d
  else if(c.special==='cambridge'){entry={date:d,level:CAMB_LEVEL,theme:'',high:'',improve:'',rows:{}};cambActive(CAMB_LEVEL).forEach(n=>{entry.rows[n]={att:'Present',obs:''};});}
  else{entry={date:d,theme:'',high:'',improve:'',periodIdx:null,period:'',rows:{}};c.students.forEach(n=>{entry.rows[n]={att:'Present',hw:'No homework',dollar:0,obs:''};});}
  (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();EDIT_IDX=STATE.sessions[id].length-1;renderClass(id);}
-function editSessionForm(id,i){
+function editSessionForm(id,i){REPORT_DIRTY=false;
  const c=getClass(id);const s=sessionsOf(id)[i];const fl=!!c.fluent;
  let names;
  if(s.personalized){names=Object.keys(s.rows||{});}
@@ -934,8 +941,8 @@ function editSessionForm(id,i){
    ${(!fl&&c.kidDollar)?`<td><input class="inp" style="width:64px;padding:5px 8px" type="number" min="0" value="${Number(r.dollar)||0}" id="edol_${k}"></td>`:''}
    ${ph?phonCell('ephon',k,r):''}
    <td><input class="inp" style="min-width:220px;padding:6px 9px" id="eobs_${k}" value="${esc(r.obs||'')}" placeholder="${obsRequired(c)?'Observation (required)':'Observation'}"></td></tr>`;}).join('');
- return `
-  <div class="page-head" style="margin-bottom:10px"><button class="back" onclick="EDIT_IDX=null;renderClass('${id}')">← All reports</button>
+ return `<div oninput="markReportDirty()" onchange="markReportDirty()">
+  <div class="page-head" style="margin-bottom:10px"><button class="back" onclick="exitEdit('${id}')">← All reports</button>
    <div><h2 style="font-size:19px">✏️ Editing report — ${esc(s.date||'')}${fl?' · '+esc(s.slot||''):''}</h2><div class="sub">Adjust anything that was noted wrong or forgotten.</div></div></div>
   <div class="card">
    <div class="row ${fl?'c3':'c2'}">
@@ -950,7 +957,7 @@ function editSessionForm(id,i){
   <div class="card"><h3>👧 Students</h3>
    <div class="tbl-wrap"><table><tr><th>Student</th><th>Attendance</th>${fl?'':'<th>Homework</th>'}${(!fl&&c.kidDollar)?'<th>Kid\'s $</th>':''}${ph?'<th>Sound of the day — skills & level</th>':''}<th>Observation</th></tr>${rows}</table></div></div>
   <button class="btn" onclick="saveEdit('${id}',${i})">💾 Save changes</button>
-  <button class="btn ghost" onclick="EDIT_IDX=null;renderClass('${id}')">Cancel</button>`;
+  <button class="btn ghost" onclick="exitEdit('${id}')">Cancel</button></div>`;
 }
 function saveEdit(id,i){try{
  const c=getClass(id);const s=sessionsOf(id)[i];if(!s)return;const fl=!!c.fluent;const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
@@ -964,7 +971,7 @@ function saveEdit(id,i){try{
  if(fl&&$("#e_slot"))s.slot=$v('e_slot');
  const ph=c.track==='phonics';
  const rows={};names.forEach((n,k)=>{if(fl){rows[n]={att:$v('eatt_'+k)||'Present',obs:$v('eobs_'+k)};}else{const row={att:$v('eatt_'+k)||'Present',hw:$v('ehw_'+k),dollar:c.kidDollar?(Number($v('edol_'+k))||0):0,obs:$v('eobs_'+k)};if(ph&&$("#ephon_"+k)){row.phon=$v('ephon_'+k);row.phsk=readPhonSkills('ephon',k);}rows[n]=row;}});
- s.rows=rows;save();toast('✅ Report updated');EDIT_IDX=null;renderClass(id);
+ s.rows=rows;save();REPORT_DIRTY=false;toast('✅ Report updated');EDIT_IDX=null;renderClass(id);
 }catch(err){toast('⚠️ Could not save the changes: '+(err&&err.message||err));}}
 
 /* ============================================================ FLUENT STEPS (Monday club, by time slot) ============================================================ */
@@ -1398,7 +1405,7 @@ function tabOverview(id){
 }
 
 /* DAILY REPORT — fewer steps */
-function tabReport(id){
+function tabReport(id){REPORT_DIRTY=false;
  const c=getClass(id);const items=trackItems(c);
  const ph=c.track==='phonics';const ros=activeStudents(c);
  const rows=ros.map((n,i)=>`<tr><td><b>${esc(displayName(id,n))}</b>${programTagsHtml(id,n)}</td>
@@ -1407,7 +1414,7 @@ function tabReport(id){
    ${c.kidDollar?`<td><input class="inp" style="width:64px;padding:5px 8px" type="number" min="0" value="0" id="dol_${i}"></td>`:''}
    ${ph?phonCell('phon',i,{}):''}
    <td><input class="inp" style="min-width:200px;padding:6px 9px" id="obs_${i}" placeholder="${obsRequired(c)?'Observation (required) — what did you notice?':'Observation (optional)'}"></td></tr>`).join('');
- return `
+ return `<div oninput="markReportDirty()" onchange="markReportDirty()">
   ${(()=>{const acts=actionsOf(id);if(!acts.length)return '';const open=acts.filter(a=>!a.done);const done=acts.filter(a=>a.done);
    const render=a=>`<div class="actrow ${a.done?'done':''}"><span class="fi2">${a.done?'✅':'🛠️'}</span><div><b>${esc(a.student)}</b> — ${esc(a.solution)}<div class="small muted">${esc(a.point||'')}${a.point?' · ':''}logged ${esc(a.date)}${a.due?` · deadline ${esc(a.due)}${(!a.done&&dueLate(a.due))?' <span class="badge b-absent">overdue</span>':''}`:''}${a.done?` · ✅ done ${esc(a.doneDate||'')}`:''}</div></div><div style="margin-left:auto;white-space:nowrap"><button class="btn ghost sm" onclick="toggleAction('${id}','${a.id}')">${a.done?'↩ Reopen':'✓ Resolve'}</button> <button class="btn ghost sm" onclick="delAction('${id}','${a.id}')">🗑</button></div></div>`;
    return `<div class="card"><h3>📌 Action plan <span class="muted small">(${open.length} open)</span></h3><p class="hint">Actions logged from the attention alerts. They stay recorded here in the daily report.</p><div class="acts">${open.map(render).join('')||'<div class="small muted">No open actions.</div>'}${done.length?`<div class="small muted" style="margin-top:6px">Resolved (${done.length})</div>${done.map(render).join('')}`:''}</div></div>`;})()}
@@ -1428,9 +1435,9 @@ function tabReport(id){
    <div class="tbl-wrap"><table><tr><th>Student</th><th>Attendance</th><th>Homework</th>${c.kidDollar?'<th>Kid\'s $</th>':''}${ph?'<th>Sound of the day — skills & level</th>':''}<th>Observation${obsRequired(c)?' *':''}</th></tr>${rows}</table></div></div>
   ${ph?phonicsRef():''}
   <button class="btn" onclick="saveReport('${id}')">💾 Save daily report</button>
-  <button class="btn ghost" onclick="if(confirm('Discard this report? Nothing will be saved.'))setTab('overview','${id}')">Cancel</button>
+  <button class="btn ghost" onclick="setTab('overview','${id}')">Cancel</button>
   <div style="margin-top:16px;border-top:1px solid var(--soft);padding-top:14px"><button class="btn" style="background:#1B7A3A;border-color:#1B7A3A" onclick="personalizedReportModal('${id}')">📗 Personalized Daily Report</button>
-   <p class="hint" style="margin-top:6px">For an exclusive / reinforcement lesson with a single child — and to pull the book &amp; skills of another class into this child's history.</p></div>`;
+   <p class="hint" style="margin-top:6px">For an exclusive / reinforcement lesson with a single child — and to pull the book &amp; skills of another class into this child's history.</p></div></div>`;
 }
 function phonicsRef(){
  const groups=PHONICS_SOUNDS.slice(0,7).map((s,i)=>`<div class="comp"><h5>${esc(PHONICS_GROUPS[i].split(' · ')[0])}</h5><div class="chips">${s.map(x=>`<span class="chip">🔊 ${esc(x)}</span>`).join('')}</div></div>`).join('');
@@ -1448,7 +1455,7 @@ function phonCell(prefix,idx,r){r=r||{};const sk=r.phsk||{};
  const sel=`<select class="att-sel" id="${prefix}_${idx}">${PHONICS_LEARN.map(o=>`<option ${(r.phon||'')===o?'selected':''}>${o}</option>`).join('')}</select>`;
  return `<td><div class="phsk-wrap">${checks}</div>${sel}</td>`;}
 function readPhonSkills(prefix,idx){const o={};PHONICS_SKILLS.forEach(([k])=>{const el=$("#"+prefix+"sk_"+k+"_"+idx);o[k]=!!(el&&el.checked);});return o;}
-function markAll(val,n){for(let i=0;i<n;i++){const el=$("#att_"+i);if(el)el.value=val;}}
+function markAll(val,n){markReportDirty();for(let i=0;i<n;i++){const el=$("#att_"+i);if(el)el.value=val;}}
 function saveReport(id){try{
  const c=getClass(id);const items=trackItems(c);const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
  const ui=$("#r_unit");const idx=items.length&&ui?Number(ui.value):null;
@@ -1464,7 +1471,7 @@ function saveReport(id){try{
  }
  const entry={date:$v('r_date')||todayISO(),theme:$v('r_theme'),periodIdx:idx,period:idx!=null?items[idx]:'',high:$v('r_high'),improve:$v('r_improve'),rows:{}};
  activeStudents(c).forEach((n,i)=>{const row={att:$v('att_'+i)||'Present',hw:$v('hw_'+i),dollar:c.kidDollar?(Number($v('dol_'+i))||0):0,obs:$v('obs_'+i)};if(c.track==='phonics'&&$("#phon_"+i)){row.phon=$v('phon_'+i);row.phsk=readPhonSkills('phon',i);}entry.rows[n]=row;});
- (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();toast("✅ Daily report saved");setTab('overview',id);
+ (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();REPORT_DIRTY=false;toast("✅ Daily report saved");setTab('overview',id);
 }catch(err){toast('⚠️ Could not save the report: '+(err&&err.message||err));}}
 /* ===== Personalized daily report — exclusive/reinforcement lesson for one child,
    optionally pulling the Skills & Competencies framework of another class (the book that child follows). ===== */
