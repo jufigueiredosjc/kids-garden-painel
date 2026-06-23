@@ -959,7 +959,7 @@ function saveEdit(id,i){try{
  else if(fl){names=fluentRoster(s.slot||c.slots[0]).slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else if(c.special==='cambridge'){names=cambRoster(s.level||'').slice();Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
  else{names=[...c.students];Object.keys(s.rows||{}).forEach(n=>{if(!names.includes(n))names.push(n);});}
- if(obsRequired(c)){const missing=[];names.forEach((n,k)=>{const att=$v('eatt_'+k);const obs=$v('eobs_'+k).trim();const el=$("#eobs_"+k);if(el)el.style.borderColor='';if((att==='Present'||att==='Late')&&!obs){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});if(missing.length){toast('✍️ Observation required for present children: '+missing.join(', '));return;}}
+ if(obsRequired(c)){const missing=[];names.forEach((n,k)=>{const att=$v('eatt_'+k);const obs=$v('eobs_'+k).trim();const el=$("#eobs_"+k);if(el)el.style.borderColor='';if((att==='Present'||att==='Late')&&obs.length<10){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});if(missing.length){toast('✍️ Observation required for present children: '+missing.join(', '));return;}}
  s.date=$v('e_date')||s.date;s.theme=$v('e_theme');s.high=$v('e_high');s.improve=$v('e_improve');
  if(fl&&$("#e_slot"))s.slot=$v('e_slot');
  const ph=c.track==='phonics';
@@ -1428,7 +1428,7 @@ function tabReport(id){
    <div class="tbl-wrap"><table><tr><th>Student</th><th>Attendance</th><th>Homework</th>${c.kidDollar?'<th>Kid\'s $</th>':''}${ph?'<th>Sound of the day — skills & level</th>':''}<th>Observation${obsRequired(c)?' *':''}</th></tr>${rows}</table></div></div>
   ${ph?phonicsRef():''}
   <button class="btn" onclick="saveReport('${id}')">💾 Save daily report</button>
-  <button class="btn ghost" onclick="setTab('overview','${id}')">Cancel</button>
+  <button class="btn ghost" onclick="if(confirm('Discard this report? Nothing will be saved.'))setTab('overview','${id}')">Cancel</button>
   <div style="margin-top:16px;border-top:1px solid var(--soft);padding-top:14px"><button class="btn" style="background:#1B7A3A;border-color:#1B7A3A" onclick="personalizedReportModal('${id}')">📗 Personalized Daily Report</button>
    <p class="hint" style="margin-top:6px">For an exclusive / reinforcement lesson with a single child — and to pull the book &amp; skills of another class into this child's history.</p></div>`;
 }
@@ -1457,7 +1457,7 @@ function saveReport(id){try{
    const missing=[];
    activeStudents(c).forEach((n,i)=>{const att=$v('att_'+i);const obs=$v('obs_'+i).trim();const el=$("#obs_"+i);
      if(el)el.style.borderColor='';
-     if((att==='Present'||att==='Late')&&!obs){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});
+     if((att==='Present'||att==='Late')&&obs.length<10){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});
    if(missing.length){toast('✍️ Please write an observation for: '+missing.join(', '));
      const first=activeStudents(c).findIndex(n=>missing.includes(displayName(id,n)));const fe=$("#obs_"+first);if(fe){try{fe.focus();fe.scrollIntoView({block:'center'});}catch(e){}}
      return;}
