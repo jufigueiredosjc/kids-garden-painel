@@ -2674,6 +2674,17 @@ function openReportPrint(title,html){
 function printOneReport(cid,name){openReportPrint('Progress Report — '+displayName(cid,name),reportBlock(cid,name));}
 function printAllReports(cid){const c=getClass(cid);openReportPrint('Progress Reports — '+(c?c.name+' '+c.time:''),reportBlocks(cid));}
 /* ===== PARENT progress report — warm, reduced, print-ready. Synthesised (no "AI" labels), gentle tone. ===== */
+/* Semester label for the parent report — computed live from the date (Jan–Jul = 1st, from August = 2nd).
+   Nothing is stored: it never touches any history. SEM_OVERRIDE is an optional session-only choice. */
+let SEM_OVERRIDE=null;
+function semesterAuto(){const iso=todayISO();const m=+iso.slice(5,7);return (m>=8?'2':'1')+'-'+iso.slice(0,4);}
+function semesterCur(){return SEM_OVERRIDE||semesterAuto();}
+function semLabelOf(v){const p=String(v).split('-');return (p[0]==='1'?'1st':'2nd')+' Semester '+(p[1]||'');}
+function semesterLabel(){return semLabelOf(semesterCur());}
+function setSemOverride(v){SEM_OVERRIDE=v||null;renderCoord();}
+function semesterPicker(){const y=+todayISO().slice(0,4);const cur=SEM_OVERRIDE||'';const vals=['1-'+y,'2-'+y,'1-'+(y+1),'2-'+(y+1)];
+ const o=`<option value="" ${cur===''?'selected':''}>Automatic (${semLabelOf(semesterAuto())})</option>`+vals.map(v=>`<option value="${v}" ${cur===v?'selected':''}>${semLabelOf(v)}</option>`).join('');
+ return `<label class="muted small" style="margin-left:10px;white-space:nowrap">🗓 Semester: <select class="inp" style="width:auto;display:inline-block;padding:4px 8px" onchange="setSemOverride(this.value)">${o}</select></label>`;}
 function parentHeader(){const logo=(document.querySelector('.logo-img')||{}).src||'';return `<div style="display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--green);padding-bottom:14px;margin-bottom:16px">${logo?`<img src="${logo}" style="height:54px;width:auto">`:'<div></div>'}<div style="margin-left:auto;text-align:right"><h2 style="margin:0;color:var(--navy)">Progress Report</h2><div class="muted small">Neuroscience-based bilingual education</div></div></div>`;}
 function parentFirst(cid,name){return (displayName(cid,name)||name).split(' ')[0];}
 function parentOverall(cid,name){const st=studentStats(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const f=parentFirst(cid,name);
@@ -2787,7 +2798,7 @@ function parentReportCard(cid,name){
      <div><label class="fl">Student</label><div style="font-size:20px;font-weight:800;color:var(--navy)">${esc(displayName(cid,name))}</div></div>
      <div><label class="fl">Age</label><div>${esc(c.age||L.age||'')}</div><div style="margin-top:6px"><label class="fl">Teacher</label><div>${esc(c.teacher)}</div></div></div>
    </div>
-   <div class="muted small">Reflects all logged classes · generated ${todayISO()}</div>
+   <div class="muted small">${semesterLabel()} · reflects all logged classes</div>
    <hr class="sep"><h3>🌟 How ${f} is doing</h3>
    <div class="narr"><ul style="margin:0 0 0 18px">${parentOverviewBullets(cid,name).map(x=>`<li style="margin-bottom:5px">${x}</li>`).join('')}</ul></div>
    <hr class="sep"><h3>📊 Attendance & engagement</h3>
@@ -2806,8 +2817,8 @@ function parentReportCard(cid,name){
  </div>`;}
 function parentBlock(cid,n){const c=getClass(cid);return `<table class="rpt-block"><thead><tr><td><div class="rpt-runhead">Progress Report · ${esc(displayName(cid,n))} · ${esc(c.teacher)}</div></td></tr></thead><tbody><tr><td>${parentReportCard(cid,n)}</td></tr></tbody></table>`;}
 function parentReportFull(){const cid=RPT.cid,name=RPT.name;const c=getClass(cid);if(!c)return '';
- if(name==='__ALL__'){const studs=activeStudents(c);return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParentAll('${cid}')" style="margin-left:8px">🖨 Print all / Save PDF</button> <span class="muted small" style="margin-left:8px">Parent reports — ${studs.length} student${studs.length===1?'':'s'} · one clean A4 page each</span></div>${studs.length?studs.map(n=>parentBlock(cid,n)).join(''):'<div class="card"><p class="muted">No active students.</p></div>'}`;}
- return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParent('${cid}','${esc(name).replace(/'/g,"\\'")}')" style="margin-left:8px">🖨 Print / Save PDF</button> <span class="muted small" style="margin-left:8px">Parent report</span></div>${parentBlock(cid,name)}${parentDevEditPanel(cid,name)}`;}
+ if(name==='__ALL__'){const studs=activeStudents(c);return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParentAll('${cid}')" style="margin-left:8px">🖨 Print all / Save PDF</button> <span class="muted small" style="margin-left:8px">Parent reports — ${studs.length} student${studs.length===1?'':'s'} · one clean A4 page each</span>${semesterPicker()}</div>${studs.length?studs.map(n=>parentBlock(cid,n)).join(''):'<div class="card"><p class="muted">No active students.</p></div>'}`;}
+ return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParent('${cid}','${esc(name).replace(/'/g,"\\'")}')" style="margin-left:8px">🖨 Print / Save PDF</button> <span class="muted small" style="margin-left:8px">Parent report</span>${semesterPicker()}</div>${parentBlock(cid,name)}${parentDevEditPanel(cid,name)}`;}
 function printParent(cid,name){openReportPrint('Progress Report — '+displayName(cid,name),parentBlock(cid,name));}
 function printParentAll(cid){const c=getClass(cid);openReportPrint('Progress Reports — '+(c?c.name:''),activeStudents(c).map(n=>parentBlock(cid,n)).join(''));}
 function fillRptStudentsP(){const c=getClass($("#rp_class_p").value);if(!c)return;$("#rp_stu_p").innerHTML='<option value="__ALL__">🧑‍🎓 All students (one document)</option>'+c.students.map(s=>`<option>${esc(s)}</option>`).join('');}
