@@ -336,7 +336,7 @@ function moveStudentToClass(oldCid,name,newCid){if(!oldCid||!newCid||oldCid===ne
  oldS.forEach(function(s){if(!s.rows||s.rows[name]===undefined)return;var k=(s.date||'')+'|'+(s.slot||'');var ns=byKey[k];if(!ns){ns={date:s.date,slot:s.slot||'',theme:'',high:'',improve:'',rows:{}};newS.push(ns);byKey[k]=ns;}ns.rows=ns.rows||{};if(ns.rows[name]===undefined)ns.rows[name]=s.rows[name];delete s.rows[name];});
  newS.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
  STATE.addedStudents=STATE.addedStudents||{};STATE.addedStudents[newCid]=STATE.addedStudents[newCid]||[];if(STATE.addedStudents[newCid].indexOf(name)<0)STATE.addedStudents[newCid].push(name);if(STATE.addedStudents[oldCid])STATE.addedStudents[oldCid]=STATE.addedStudents[oldCid].filter(function(n){return n!==name;});
- ['students','archived','dollarAdj','dollarAdjNote','coordNotes'].forEach(function(kk){var o=STATE[kk];if(!o)return;var ok=oldCid+'::'+name,nk=newCid+'::'+name;if(o[ok]!==undefined){o[nk]=o[ok];delete o[ok];}});
+ ['students','archived','dollarAdj','dollarAdjNote','coordNotes','parentDevNote'].forEach(function(kk){var o=STATE[kk];if(!o)return;var ok=oldCid+'::'+name,nk=newCid+'::'+name;if(o[ok]!==undefined){o[nk]=o[ok];delete o[ok];}});
  var sk=STATE.skills;if(sk&&sk[oldCid]){sk[newCid]=sk[newCid]||{};Object.keys(sk[oldCid]).forEach(function(per){var pm=sk[oldCid][per];if(pm&&pm[name]!==undefined){sk[newCid][per]=sk[newCid][per]||{};sk[newCid][per][name]=pm[name];delete pm[name];}});}
  tombstone('stu|'+oldCid+'|'+name);}
 function saveStudentMeta(cid,name){const f=($("#sm_full").value||'').trim();const dob=($("#sm_dob").value||'').trim();const sel=$("#sm_class");const newCid=sel?sel.value:cid;
@@ -458,7 +458,7 @@ const SEED_SKILLS={};
 const CLASS_BASE=JSON.parse(JSON.stringify(CLASSES));
 let STATE=load();
 try{applyClassMeta();}catch(e){}
-function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],trials:{},projects:{},unitsAdd:{},tombstones:{}};}
+function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],trials:{},projects:{},unitsAdd:{},parentDevNote:{},tombstones:{}};}
 function load(){
  let s=null;
  try{const r=localStorage.getItem(LS_KEY);if(r)s=JSON.parse(r);}catch(e){}
@@ -514,7 +514,7 @@ function applyTombstones(m){var T=m&&m.tombstones;if(!T)return m;var any=false,k
 function mergeStatesForSave(base,loc){var m={},k;for(k in base)m[k]=base[k];for(k in loc)if(!(k in m))m[k]=loc[k];
  m.sessions=_mSessions(base.sessions||{},loc.sessions||{});m.addedStudents=_mAdded(base.addedStudents||{},loc.addedStudents||{});
  m.customClasses=_mById(base.customClasses||[],loc.customClasses||[]);m.teacherTasks=_mById(base.teacherTasks||[],loc.teacherTasks||[]);m.taskLog=_mById(base.taskLog||[],loc.taskLog||[]);m.patches=_mUniq(base.patches||[],loc.patches||[]);
- ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','projects','unitsAdd'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
+ ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','projects','unitsAdd','parentDevNote'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
  m.tombstones=_mObj(base.tombstones||{},loc.tombstones||{});
  return applyTombstones(m);}
 async function cloudSave(){if(!sbClient)return;try{
@@ -2728,6 +2728,53 @@ function parentNeuroComment(cid,name){const c=getClass(cid);const f=parentFirst(
  if(dev.length)s+=`A gentle, encouraging focus on ${dev.slice(0,2).join(' and ')}, always with warmth and never pressure, will keep this growth steady, because a calm and confident mind is what truly unlocks learning. `;
  s+=`Overall, ${f} is developing beautifully, and we feel privileged to be part of this journey with your family.`;
  return esc(s);}
+/* Individual, gentle parent-facing development note. It NEVER echoes a raw teacher/coordination
+   observation — the observation only SELECTS a pre-written warm reframing, so the message can never
+   come out harsh. Coordination can override the wording (stored per child in STATE.parentDevNote). */
+function parentDevThemes(cid,name){
+ const f=parentFirst(cid,name);let blob='';
+ try{coordNotesOf(cid,name).forEach(o=>{blob+=' '+(o.text||'');});}catch(e){}
+ try{studentActions(cid,name).forEach(a=>{blob+=' '+(a.point||'')+' '+(a.solution||'');});}catch(e){}
+ try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs&&NEG_RE.test(r.obs))blob+=' '+r.obs;});}catch(e){}
+ blob=(' '+blob+' ').toLowerCase();
+ if(!blob.trim())return [];
+ const T=[
+  [/(focus|distract|atten|concentrat|dispers|wander|day ?dream)/,`We have noticed ${f} is still building longer stretches of focus, which is completely natural at this stage. In class we gently guide attention back through movement, songs and short, meaningful tasks, and this concentration is already growing.`],
+  [/(late|arriv|atras|miss the start|tardy)/,`Arriving in good time for the warm up helps ${f} settle and enjoy the whole class. A calm, consistent start makes a real difference, and we are glad to support this together.`],
+  [/(homework|tarefa|home practice|didn'?t do|did not do|forgot|incomplete)/,`A little regular practice at home helps everything ${f} learns in class become natural and lasting. Even a few playful minutes a day make a wonderful difference, and we are always happy to share simple ideas.`],
+  [/(understand|instruct|confus|repeat|explain again|didn'?t get|did not get|lost)/,`At times ${f} likes to hear an instruction once more before starting, which is a very normal part of learning in a second language. We give that extra moment with patience, and ${f}'s independence keeps growing.`],
+  [/(absen|falta|missed class|frequen|attendance)/,`Steady presence gives ${f} the continuity the brain loves for language learning. Whenever possible, a consistent routine of attendance will help this lovely progress keep its rhythm.`],
+  [/(shy|timid|quiet|reluctan|hesitat|confiden|speak up|afraid|nervous|insecure)/,`${f} is building the confidence to speak up in English, and we are nurturing this gently, never with pressure, through small and safe moments to shine. Confidence grows best when a child feels calm and supported.`],
+  [/(talk|conversa|chat|disrupt|restless|agita|energy|behav|interrupt|excit)/,`${f} is full of energy and ideas, and we are gently channelling this into focused participation, helping ${f} balance enthusiasm with listening. This is a healthy and very normal part of growing.`],
+  [/(read|writing|write|letter|spell|literac|phonic)/,`${f} is developing reading and writing at a healthy pace. With calm, playful practice these skills will keep strengthening naturally, and there is no cause for any worry.`],
+  [/(vocab|word|pronoun|grammar|tense|structure)/,`${f} is steadily widening vocabulary and language structures, and with warm, repeated exposure these keep settling into place beautifully.`]
+ ];
+ const out=[];T.forEach(x=>{if(out.length<2&&x[0].test(blob))out.push(x[1]);});return out;
+}
+function parentDevNoteAuto(cid,name){
+ const c=getClass(cid);const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);
+ const young=["Nursery","Kinder","KinderPlus","K1"].includes(c.level);
+ let s=`At Kids Garden, ${f} learns English the way the brain learns best, through meaningful, playful and repeated experiences rather than memorisation. `;
+ if(prof.length)s+=`The confident growth in ${prof.slice(0,3).join(', ')} tells us the language is becoming natural and automatic for ${f}. `;
+ if(young)s+=`At this age the brain is wonderfully receptive to sounds and patterns, so every song, game and gesture helps English settle deeply and joyfully. `;
+ else s+=`As the brain consolidates language through varied, spaced practice, ${f}'s skills are gradually moving from effort into ease. `;
+ const themes=parentDevThemes(cid,name);
+ if(themes.length){themes.forEach(t=>{s+=t+' ';});}
+ else if(dev.length){s+=`A gentle, encouraging focus on ${dev.slice(0,2).join(' and ')}, always with warmth and never pressure, will keep this growth steady, because a calm and confident mind is what truly unlocks learning. `;}
+ s+=`Overall, ${f} is developing beautifully, and we feel privileged to be part of this journey with your family.`;
+ return s;
+}
+function parentDevNoteKey(cid,name){return cid+'::'+name;}
+function parentDevNoteText(cid,name){STATE.parentDevNote=STATE.parentDevNote||{};const ov=STATE.parentDevNote[parentDevNoteKey(cid,name)];return (ov&&String(ov).trim())?String(ov):parentDevNoteAuto(cid,name);}
+function saveParentDevNote(cid,name){const el=$("#pdn_text");if(!el)return;const t=el.value.trim();STATE.parentDevNote=STATE.parentDevNote||{};if(t)STATE.parentDevNote[parentDevNoteKey(cid,name)]=t;else delete STATE.parentDevNote[parentDevNoteKey(cid,name)];save();toast('✅ Development note saved');renderCoord();}
+function resetParentDevNote(cid,name){STATE.parentDevNote=STATE.parentDevNote||{};delete STATE.parentDevNote[parentDevNoteKey(cid,name)];save();toast('↺ Reset to the automatic note');renderCoord();}
+function parentDevEditPanel(cid,name){const f=parentFirst(cid,name);STATE.parentDevNote=STATE.parentDevNote||{};const ov=STATE.parentDevNote[parentDevNoteKey(cid,name)]&&String(STATE.parentDevNote[parentDevNoteKey(cid,name)]).trim();const ns=esc(name).replace(/'/g,"\\'");
+ return `<div class="no-print card" style="margin-top:14px;border-color:#1B7A3A">
+  <h3>🧠 Development note — the parents will read this</h3>
+  <p class="hint">Written automatically for ${esc(f)} from the coordination notes and the teacher's attention points, always in a gentle, constructive tone (each child is different). You can adjust the wording: edit below and Save to use your version, or Reset to return to the automatic text.</p>
+  <textarea class="inp" id="pdn_text" rows="6" style="width:100%;min-height:140px">${esc(parentDevNoteText(cid,name))}</textarea>
+  <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" onclick="saveParentDevNote('${cid}','${ns}')">💾 Save my version</button> <button class="btn ghost" onclick="resetParentDevNote('${cid}','${ns}')">↺ Reset to automatic</button> <span class="muted small">${ov?'Currently showing your edited version.':'Currently showing the automatic version.'}</span></div>
+ </div>`;}
 function parentReportCard(cid,name){
  const c=getClass(cid);const L=LEVELS[c.level]||{};const st=studentStats(cid,name);const set=SKILLSETS[c.level]||SKILLSETS.K1;
  const skl=STATE.skills[cid]||{};const skillSummary={};
@@ -2754,13 +2801,13 @@ function parentReportCard(cid,name){
    ${parentHighlights(cid,name)}
    ${parentExtraActivities(cid,name)}
    <hr class="sep"><h3>🧠 A note on ${f}'s development</h3>
-   <div class="narr">${parentNeuroComment(cid,name)}</div>
+   <div class="narr">${esc(parentDevNoteText(cid,name))}</div>
    <hr class="sep"><p class="center muted small">🌱 At Kids Garden we truly care about every child. Thank you for growing with us.</p>
  </div>`;}
 function parentBlock(cid,n){const c=getClass(cid);return `<table class="rpt-block"><thead><tr><td><div class="rpt-runhead">Progress Report · ${esc(displayName(cid,n))} · ${esc(c.teacher)}</div></td></tr></thead><tbody><tr><td>${parentReportCard(cid,n)}</td></tr></tbody></table>`;}
 function parentReportFull(){const cid=RPT.cid,name=RPT.name;const c=getClass(cid);if(!c)return '';
  if(name==='__ALL__'){const studs=activeStudents(c);return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParentAll('${cid}')" style="margin-left:8px">🖨 Print all / Save PDF</button> <span class="muted small" style="margin-left:8px">Parent reports — ${studs.length} student${studs.length===1?'':'s'} · one clean A4 page each</span></div>${studs.length?studs.map(n=>parentBlock(cid,n)).join(''):'<div class="card"><p class="muted">No active students.</p></div>'}`;}
- return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParent('${cid}','${esc(name).replace(/'/g,"\\'")}')" style="margin-left:8px">🖨 Print / Save PDF</button> <span class="muted small" style="margin-left:8px">Parent report</span></div>${parentBlock(cid,name)}`;}
+ return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParent('${cid}','${esc(name).replace(/'/g,"\\'")}')" style="margin-left:8px">🖨 Print / Save PDF</button> <span class="muted small" style="margin-left:8px">Parent report</span></div>${parentBlock(cid,name)}${parentDevEditPanel(cid,name)}`;}
 function printParent(cid,name){openReportPrint('Progress Report — '+displayName(cid,name),parentBlock(cid,name));}
 function printParentAll(cid){const c=getClass(cid);openReportPrint('Progress Reports — '+(c?c.name:''),activeStudents(c).map(n=>parentBlock(cid,n)).join(''));}
 function fillRptStudentsP(){const c=getClass($("#rp_class_p").value);if(!c)return;$("#rp_stu_p").innerHTML='<option value="__ALL__">🧑‍🎓 All students (one document)</option>'+c.students.map(s=>`<option>${esc(s)}</option>`).join('');}
