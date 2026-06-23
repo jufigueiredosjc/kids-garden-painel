@@ -2739,10 +2739,15 @@ function parentNeuroComment(cid,name){const c=getClass(cid);const f=parentFirst(
  if(dev.length)s+=`A gentle, encouraging focus on ${dev.slice(0,2).join(' and ')}, always with warmth and never pressure, will keep this growth steady, because a calm and confident mind is what truly unlocks learning. `;
  s+=`Overall, ${f} is developing beautifully, and we feel privileged to be part of this journey with your family.`;
  return esc(s);}
-/* Individual, gentle parent-facing development note. It NEVER echoes a raw teacher/coordination
-   observation — the observation only SELECTS a pre-written warm reframing, so the message can never
-   come out harsh. Coordination can override the wording (stored per child in STATE.parentDevNote). */
-function parentDevThemes(cid,name){
+/* Individual, gentle parent-facing development note. It reads the child's whole registered history
+   (skills, observations, attendance, homework, coordination notes, teacher attention) and is wired so
+   two children, even twins or cousins, read differently: a per-child seed picks among many phrasings,
+   and the real data (skills, class counts, attendance) differs per child. It NEVER echoes a raw
+   observation; the observation only SELECTS a pre-written warm reframing, so it can never come out harsh. */
+function seedOf(cid,name){let h=2166136261;const s=String(cid)+'|'+String(name);for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=(h*16777619)>>>0;}return h>>>0;}
+function pickN(arr,seed){if(!arr||!arr.length)return '';return arr[(seed>>>0)%arr.length];}
+function andList(a){a=(a||[]).slice(0,3);if(!a.length)return '';if(a.length===1)return a[0];if(a.length===2)return a[0]+' and '+a[1];return a[0]+', '+a[1]+' and '+a[2];}
+function parentDevThemes(cid,name,seed){
  const f=parentFirst(cid,name);let blob='';
  try{coordNotesOf(cid,name).forEach(o=>{blob+=' '+(o.text||'');});}catch(e){}
  try{studentActions(cid,name).forEach(a=>{blob+=' '+(a.point||'')+' '+(a.solution||'');});}catch(e){}
@@ -2750,43 +2755,43 @@ function parentDevThemes(cid,name){
  blob=(' '+blob+' ').toLowerCase();
  if(!blob.trim())return [];
  const T=[
-  [/(focus|distract|atten|concentrat|dispers|wander|day ?dream)/,`We have noticed ${f} is still building longer stretches of focus, which is completely natural at this stage. In class we gently guide attention back through movement, songs and short, meaningful tasks, and this concentration is already growing.`],
-  [/(late|arriv|atras|miss the start|tardy)/,`Arriving in good time for the warm up helps ${f} settle and enjoy the whole class. A calm, consistent start makes a real difference, and we are glad to support this together.`],
-  [/(homework|tarefa|home practice|didn'?t do|did not do|forgot|incomplete)/,`A little regular practice at home helps everything ${f} learns in class become natural and lasting. Even a few playful minutes a day make a wonderful difference, and we are always happy to share simple ideas.`],
-  [/(understand|instruct|confus|repeat|explain again|didn'?t get|did not get|lost)/,`At times ${f} likes to hear an instruction once more before starting, which is a very normal part of learning in a second language. We give that extra moment with patience, and ${f}'s independence keeps growing.`],
-  [/(shy|timid|quiet|reluctan|hesitat|confiden|speak up|afraid|nervous|insecure)/,`${f} is building the confidence to speak up in English, and we are nurturing this gently, never with pressure, through small and safe moments to shine. Confidence grows best when a child feels calm and supported.`],
-  [/(talk|conversa|chat|disrupt|restless|agita|energy|behav|interrupt|excit)/,`${f} is full of energy and ideas, and we are gently channelling this into focused participation, helping ${f} balance enthusiasm with listening. This is a healthy and very normal part of growing.`],
-  [/(read|writing|write|letter|spell|literac|phonic)/,`${f} is developing reading and writing at a healthy pace. With calm, playful practice these skills will keep strengthening naturally, and there is no cause for any worry.`],
-  [/(vocab|word|pronoun|grammar|tense|structure)/,`${f} is steadily widening vocabulary and language structures, and with warm, repeated exposure these keep settling into place beautifully.`]
+  [/(focus|distract|atten|concentrat|dispers|wander|day ?dream)/,[`We have noticed ${f} is still building longer stretches of focus, which is completely natural at this stage, and in class we gently guide attention back through movement, songs and short, meaningful tasks.`,`${f}'s concentration is still growing, just as we expect at this age, and we help it along with playful, bite sized activities that keep ${f} engaged and present.`]],
+  [/(late|arriv|atras|miss the start|tardy)/,[`Arriving in good time for the warm up helps ${f} settle and enjoy the whole class, and a calm, consistent start makes a real difference.`,`When ${f} is there right from the warm up, the class flows so much better, and we are glad to help build that gentle routine together.`]],
+  [/(homework|tarefa|home practice|didn'?t do|did not do|forgot|incomplete)/,[`A little regular practice at home helps everything ${f} learns in class become natural and lasting, and even a few playful minutes a day make a wonderful difference.`,`Carrying English into home in small, joyful doses helps it stick for ${f}, and we are always happy to share simple, light ideas to try.`]],
+  [/(understand|instruct|confus|repeat|explain again|didn'?t get|did not get|lost)/,[`At times ${f} likes to hear an instruction once more before starting, which is a very normal part of learning in a second language, and we give that extra moment with patience.`,`${f} sometimes benefits from a second, calmer explanation before diving in, and as we offer it ${f}'s independence keeps growing.`]],
+  [/(shy|timid|quiet|reluctan|hesitat|confiden|speak up|afraid|nervous|insecure)/,[`${f} is building the confidence to speak up in English, and we are nurturing this gently, never with pressure, through small and safe moments to shine.`,`Confidence to speak is blossoming in ${f} at its own pace, and we protect that by creating warm, low pressure chances to be heard.`]],
+  [/(talk|conversa|chat|disrupt|restless|agita|energy|behav|interrupt|excit)/,[`${f} is full of energy and ideas, and we are gently channelling this into focused participation, helping ${f} balance enthusiasm with listening.`,`${f} brings wonderful liveliness to the room, and we are guiding that spark into turn taking and focused moments, a healthy part of growing.`]],
+  [/(read|writing|write|letter|spell|literac|phonic)/,[`${f} is developing reading and writing at a healthy pace, and with calm, playful practice these skills will keep strengthening naturally.`,`Letters and words are coming together for ${f} step by step, and there is no rush, only steady, happy growth ahead.`]],
+  [/(vocab|word|pronoun|grammar|tense|structure)/,[`${f} is steadily widening vocabulary and language structures, and with warm, repeated exposure these keep settling into place beautifully.`,`New words and patterns are taking root for ${f}, and each meaningful repetition makes them feel more natural.`]]
  ];
- const out=[];T.forEach(x=>{if(out.length<2&&x[0].test(blob))out.push(x[1]);});return out;
+ const out=[];T.forEach((x,i)=>{if(out.length<2&&x[0].test(blob))out.push(pickN(x[1],seed>>(i+1)));});return out;
 }
-function parentDevPositive(cid,name){const f=parentFirst(cid,name);let obs='';try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}const b=obs.toLowerCase();
- if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(b))return `Across the term ${f} has taken part with genuine enthusiasm, contributing naturally and joyfully in English.`;
- if(/vocab|word|sentence|spontan|fluen|spoke|speaking|express/.test(b))return `${f} has been using new words and expressing ideas more and more spontaneously, which is lovely to see.`;
- if(/project|creat|made|built|craft|imagin/.test(b))return `${f} brings real creativity and focus to the class projects.`;
- if(/help|kind|friend|share|caring|polite|leader|social/.test(b))return `${f} is a caring and collaborative presence, a real warmth in the group.`;
+function parentDevPositive(cid,name,seed){const f=parentFirst(cid,name);let obs='';try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}const b=obs.toLowerCase();
+ if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(b))return pickN([`Across the term ${f} has taken part with genuine enthusiasm, joining in naturally and joyfully in English.`,`${f} dives into the activities with real energy and curiosity, and that spirit is a joy to see.`,`Time and again ${f} gets fully involved in class, contributing with a happy, willing heart.`],seed);
+ if(/vocab|word|sentence|spontan|fluen|spoke|speaking|express/.test(b))return pickN([`${f} has been using new words and expressing ideas more and more spontaneously, which is lovely to watch.`,`Little by little ${f} is speaking up with new vocabulary and putting thoughts into English more freely.`,`${f}'s spoken English is blossoming, with fresh words and phrases appearing more naturally each week.`],seed);
+ if(/project|creat|made|built|craft|imagin/.test(b))return pickN([`${f} brings real creativity and focus to the class projects.`,`In the projects ${f} shines with imagination and careful, proud work.`,`${f} pours creativity into the hands on activities, and the results are wonderful.`],seed);
+ if(/help|kind|friend|share|caring|polite|leader|social/.test(b))return pickN([`${f} is a caring and collaborative presence, a real warmth in the group.`,`${f} is kind and helpful with friends, making the classroom a gentler place.`,`${f} works beautifully with classmates, sharing and encouraging with natural kindness.`],seed);
  return '';}
 /* Attendance read from the child's real registered history. Signals 20%+ absences gently but clearly. */
-function parentDevAttendance(cid,name){const st=studentStats(cid,name);const f=parentFirst(cid,name);const den=st.p+st.a+st.l;if(den<4)return '';
- if(st.a/den>=0.2)return `We have gently noticed that ${f} has missed a number of classes this term. Because every lesson builds softly on the one before, a more regular presence will help ${f} enjoy the full benefit of this progress, and we are always here to make the routine easier. Being in class consistently truly helps English settle naturally and confidently.`;
- if(st.attRate!=null&&st.attRate>=90)return `${f}'s consistent presence in class is wonderful and gives the brain exactly the regular, joyful contact with English it loves.`;
+function parentDevAttendance(cid,name,seed){const st=studentStats(cid,name);const f=parentFirst(cid,name);const den=st.p+st.a+st.l;if(den<4)return '';
+ if(st.a/den>=0.2)return pickN([`We have gently noticed that ${f} has missed a number of classes this term. Because every lesson builds softly on the one before, a more regular presence will help ${f} enjoy the full benefit of this progress, and we are always here to make the routine easier.`,`With warmth we share that ${f} has been away from class fairly often lately. English settles best with steady, regular contact, so coming along more consistently will really help ${f} keep this lovely momentum, and we are happy to support that together.`,`One gentle note: ${f} has missed several classes this term. Since each class connects to the next, more regular attendance will let ${f} get the most from every step, and we are here to help in any way we can.`],seed);
+ if(st.attRate!=null&&st.attRate>=90)return pickN([`${f}'s consistent presence in class is wonderful and gives the brain exactly the regular, joyful contact with English it loves.`,`${f} attends so faithfully, and that steady rhythm is one of the quiet secrets behind this progress.`,`The constancy of ${f}'s attendance is a real gift to the learning, giving English the regular practice it thrives on.`],seed);
  return '';}
 function parentDevNoteAuto(cid,name){
- const c=getClass(cid);const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);
- const young=["Nursery","Kinder","KinderPlus","K1"].includes(c.level);
- let s=`At Kids Garden, ${f} learns English the way the brain learns best, through meaningful, playful and repeated experiences rather than memorisation. `;
- if(prof.length)s+=`The confident growth in ${prof.slice(0,3).join(', ')} tells us the language is becoming natural and automatic for ${f}. `;
- const pos=parentDevPositive(cid,name);if(pos)s+=pos+' ';
- if(young)s+=`At this age the brain is wonderfully receptive to sounds and patterns, so every song, game and gesture helps English settle deeply and joyfully. `;
- else s+=`As the brain consolidates language through varied, spaced practice, ${f}'s skills are gradually moving from effort into ease. `;
- const att=parentDevAttendance(cid,name);
- const themes=parentDevThemes(cid,name).slice(0,att?1:2);
+ const c=getClass(cid);const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const st=studentStats(cid,name);
+ const young=["Nursery","Kinder","KinderPlus","K1"].includes(c.level);const seed=seedOf(cid,name);
+ let s=pickN([`At Kids Garden, ${f} learns English the way the brain learns best, through meaningful and playful experiences rather than memorisation. `,`Here at Kids Garden, English reaches ${f} through play, stories and real meaning, which is exactly how a child's brain takes in a language. `,`${f} is growing in English in the most natural way, living the language through games, songs and projects rather than memorising it. `,`Week by week, ${f} meets English as something to enjoy and explore, and that is just how the brain makes a new language its own. `],seed);
+ if(prof.length){const list=andList(prof);s+=pickN([`The confident growth in ${list} shows the language is becoming natural and automatic for ${f}. `,`${f} is already at real ease with ${list}, a sign that English is settling in deeply. `,`We especially notice ${f} flourishing in ${list}, which is a joy to watch unfold. `,`${list} ${prof.length>1?'are':'is'} becoming a genuine strength for ${f}. `],seed>>3);}
+ const pos=parentDevPositive(cid,name,seed>>5);if(pos)s+=pos+' ';
+ if(st.seen>=4){const fa=pickN([`Across the ${st.seen} classes recorded so far, ${f} has been building a steady, personal relationship with English. `,`Over this term's ${st.seen} logged classes, ${f}'s path with English is taking on its own rhythm and character. `,``,``],seed>>7);if(fa)s+=fa;}
+ s+=pickN(young?[`At this age the brain is wonderfully open to sounds and patterns, so every song, game and gesture helps English settle deeply and joyfully. `,`Little minds soak up language through repetition and play, and ${f} is right in that golden window where English takes root almost effortlessly. `]:[`As the brain consolidates language through varied, spaced practice, ${f}'s skills are gradually moving from effort into ease. `,`With each layered, meaningful repetition, English is becoming more automatic for ${f}, shifting from thinking about it to simply using it. `],seed>>9);
+ const att=parentDevAttendance(cid,name,seed>>11);
+ const themes=parentDevThemes(cid,name,seed).slice(0,att?1:2);
  if(themes.length){themes.forEach(t=>{s+=t+' ';});}
- else if(dev.length){s+=`A gentle, encouraging focus on ${dev.slice(0,2).join(' and ')}, always with warmth and never pressure, will keep this growth steady, because a calm and confident mind is what truly unlocks learning. `;}
+ else if(dev.length){const list=andList(dev.slice(0,2));s+=pickN([`A gentle, encouraging focus on ${list}, always with warmth and never pressure, will keep this growth steady, because a calm and confident mind is what truly unlocks learning. `,`A little extra, playful attention to ${list}, offered with patience and never pressure, will help ${f} keep moving forward with confidence. `],seed>>15);}
  if(att)s+=att+' ';
- s+=`Overall, ${f} is developing beautifully, and we feel privileged to be part of this journey with your family.`;
- return s;
+ s+=pickN([`Overall, ${f} is developing beautifully, and we feel privileged to walk this path alongside your family. `,`All in all, ${f} is flourishing, and it is a joy to share this journey with you. `,`In short, ${f} keeps growing with confidence, and we are grateful to be part of it with your family. `,`Above all, ${f} is growing in a happy, healthy way, and we treasure being part of this journey. `],seed>>13);
+ return s.trim();
 }
 function parentDevNoteKey(cid,name){return cid+'::'+name;}
 function parentDevNoteText(cid,name){STATE.parentDevNote=STATE.parentDevNote||{};const ov=STATE.parentDevNote[parentDevNoteKey(cid,name)];return (ov&&String(ov).trim())?String(ov):parentDevNoteAuto(cid,name);}
