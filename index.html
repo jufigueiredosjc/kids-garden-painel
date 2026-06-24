@@ -527,7 +527,20 @@ async function cloudSave(){if(!sbClient)return;try{
 }catch(e){console.warn('cloudSave',e&&e.message||e);}}
 function mergeState(raw){const b=blank();const s=Object.assign(b,raw||{});s.patches=s.patches||[];return s;}
 async function loadCloud(){if(!sbClient)return;try{const r=await sbClient.from('app_state').select('data').eq('id',1).single();if(r.error){console.warn('loadCloud',r.error.message);return;}const raw=r.data&&r.data.data;const empty=!(raw&&Object.keys(raw).length);if(!empty){STATE=mergeState(raw);}try{applyPatches(STATE);}catch(e){}if(empty){try{migrateForCloud();}catch(e){}}try{applyClassMeta();}catch(e){}try{syncAdded();}catch(e){}cloudSave();}catch(e){console.warn(e);}}
-function subscribeCloud(){if(!sbClient)return;try{sbClient.channel('app_state_rt').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state'},payload=>{const row=payload&&payload.new;if(row&&row.updated_by!==CURRENT_EMAIL&&row.data){STATE=mergeState(row.data);try{applyClassMeta();}catch(e){}render();}}).subscribe();}catch(e){}}
+/* When a remote update arrives while the user is busy editing, we defer the re-render and flush it
+   here a few seconds later, once they are no longer typing or in a form. Never disturbs active editing. */
+let CLOUD_PENDING_RENDER=false;
+try{setInterval(function(){if(!CLOUD_PENDING_RENDER)return;var ae=document.activeElement;var busy=REPORT_DIRTY||(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))||document.querySelector('.od-overlay');if(!busy){CLOUD_PENDING_RENDER=false;try{render();}catch(e){}}},3000);}catch(e){}
+function subscribeCloud(){if(!sbClient)return;try{sbClient.channel('app_state_rt').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state'},payload=>{const row=payload&&payload.new;if(row&&row.updated_by!==CURRENT_EMAIL&&row.data){
+  /* Merge the remote change INTO local (never replace) so in-progress local work is preserved. */
+  try{STATE=mergeStatesForSave(row.data,STATE);}catch(e){STATE=mergeState(row.data);}
+  try{applyClassMeta();}catch(e){}
+  /* Never re-render (which would wipe a half-typed form) while someone is actively editing.
+     The merged STATE is already current; the UI refreshes on their next save/navigation. */
+  var ae=document.activeElement;
+  var busy=REPORT_DIRTY||(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))||document.querySelector('.od-overlay');
+  if(busy){CLOUD_PENDING_RENDER=true;}else{CLOUD_PENDING_RENDER=false;render();}
+ }}).subscribe();}catch(e){}}
 /* ===== Online-now presence (Supabase Realtime Presence) ===== */
 let PRESENCE_CH=null;
 function _shortName(e){return (e||'').split('@')[0];}
