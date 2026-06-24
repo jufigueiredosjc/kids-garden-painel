@@ -829,7 +829,7 @@ function showOverdueModal(c,od){
  document.body.appendChild(w);beep();
 }
 function closeOverdueModal(id){const m=document.getElementById('odmodal');if(m)m.remove();setTab('report',id);}
-function render(){const v=VIEW.name;if(v!=='class'&&v!=='student')LAST_CLASS_ENTERED=null;if(v==='home')return renderHome();if(v==='class')return renderClass(VIEW.arg);if(v==='learning')return renderLearning();if(v==='coord')return renderCoordGate();if(v==='student')return renderStudentView();if(v==='teacher')return renderTeacher();}
+function render(){['leavepop','obspop'].forEach(function(pid){var p=document.getElementById(pid);if(p)p.remove();});const v=VIEW.name;if(v!=='class'&&v!=='student')LAST_CLASS_ENTERED=null;if(v==='home')return renderHome();if(v==='class')return renderClass(VIEW.arg);if(v==='learning')return renderLearning();if(v==='coord')return renderCoordGate();if(v==='student')return renderStudentView();if(v==='teacher')return renderTeacher();}
 function openStudent(cid,name,mode){VIEW={name:'student',arg:{cid,name,mode:mode||'report'}};try{window.scrollTo(0,0);}catch(e){}render();}
 
 /* ============================================================ HOME ============================================================ */
@@ -1086,7 +1086,7 @@ function saveFluentReport(id){try{
  if(missing.length){toast('✍️ Please write an observation for: '+missing.map(n=>displayName(id,n)).join(', '));return;}
  const entry={date:$v('fr_date')||recentMonday(),slot,theme:$v('fr_theme'),high:$v('fr_high'),improve:$v('fr_improve'),rows:{}};
  roster.forEach(n=>{const d=FLUENT_DRAFT[n]||{};entry.rows[n]={att:d.att||'Present',obs:d.obs||''};});
- (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);FLUENT_DRAFT={};save();toast("✅ Class report saved");setTab('overview',id);
+ (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);FLUENT_DRAFT={};save();REPORT_DIRTY=false;toast("✅ Class report saved");setTab('overview',id);
 }catch(err){toast('⚠️ Could not save: '+(err&&err.message||err));}}
 function fluentStudents(id){
  const c=getClass(id);
@@ -1287,7 +1287,7 @@ function cambSaveReport(id){try{
  const lvl=CAMB_LEVEL;const roster=cambActive(lvl).filter(n=>!cambClosed(n));const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
  const entry={date:$v('r_date')||todayISO(),level:lvl,theme:$v('r_theme'),paper:$v('r_paper'),high:$v('r_high'),improve:$v('r_improve'),rows:{}};
  roster.forEach((n,i)=>{entry.rows[n]={att:$v('att_'+i)||'Present',hw:$v('hw_'+i),obs:$v('obs_'+i)};});
- (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();toast("✅ Lesson saved");setTab('overview',id);
+ (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();REPORT_DIRTY=false;toast("✅ Lesson saved");setTab('overview',id);
 }catch(err){toast('⚠️ Could not save: '+(err&&err.message||err));}}
 /* Move a Cambridge report between exam levels (Starters/Movers/Flyers/B1) — only within Cambridge. */
 function cambMoveReportModal(id,i){const s=sessionsOf(id)[i];if(!s)return;const ex=document.getElementById('cmmodal');if(ex)ex.remove();
