@@ -526,7 +526,7 @@ async function cloudSave(){if(!sbClient)return;try{
  if(w&&w.error)console.warn('cloudSave',w.error.message);
 }catch(e){console.warn('cloudSave',e&&e.message||e);}}
 function mergeState(raw){const b=blank();const s=Object.assign(b,raw||{});s.patches=s.patches||[];return s;}
-async function loadCloud(){if(!sbClient)return;try{const r=await sbClient.from('app_state').select('data').eq('id',1).single();if(r.error){console.warn('loadCloud',r.error.message);return;}const raw=r.data&&r.data.data;const empty=!(raw&&Object.keys(raw).length);if(!empty){STATE=mergeState(raw);}try{applyPatches(STATE);}catch(e){}if(empty){try{migrateForCloud();}catch(e){}}try{applyClassMeta();}catch(e){}try{syncAdded();}catch(e){}cloudSave();}catch(e){console.warn(e);}}
+async function loadCloud(){if(!sbClient)return;try{const r=await sbClient.from('app_state').select('data').eq('id',1).single();if(r.error){console.warn('loadCloud',r.error.message);return;}const raw=r.data&&r.data.data;const empty=!(raw&&Object.keys(raw).length);if(!empty){try{STATE=mergeStatesForSave(mergeState(raw),STATE);}catch(e){STATE=mergeState(raw);}}try{applyPatches(STATE);}catch(e){}if(empty){try{migrateForCloud();}catch(e){}}try{applyClassMeta();}catch(e){}try{syncAdded();}catch(e){}cloudSave();}catch(e){console.warn(e);}}
 /* When a remote update arrives while the user is busy editing, we defer the re-render and flush it
    here a few seconds later, once they are no longer typing or in a form. Never disturbs active editing. */
 let CLOUD_PENDING_RENDER=false;
@@ -1000,7 +1000,7 @@ function saveEdit(id,i){try{
  else if(s.personalized){names=_rk;}
  else if(fl){names=fluentRoster(s.slot||c.slots[0]).slice();_rk.forEach(n=>{if(!names.includes(n))names.push(n);});}
  else{names=[...c.students];_rk.forEach(n=>{if(!names.includes(n))names.push(n);});}
- if(obsRequired(c)){const missing=[];names.forEach((n,k)=>{const att=$v('eatt_'+k);const obs=$v('eobs_'+k).trim();const el=$("#eobs_"+k);if(el)el.style.borderColor='';if((att==='Present'||att==='Late')&&obs.length<10){missing.push(displayName(id,n));if(el)el.style.borderColor='var(--bad)';}});if(missing.length){const firstK=names.findIndex(n=>missing.includes(displayName(id,n)));missingObsPopup(missing,'eobs_'+firstK);return;}}
+ if(obsRequired(c)){names.forEach((n,k)=>{const att=$v('eatt_'+k);const obs=$v('eobs_'+k).trim();const el=$("#eobs_"+k);if(el)el.style.borderColor=((att==='Present'||att==='Late')&&obs.length<10)?'var(--bad)':'';});}
  s.date=$v('e_date')||s.date;s.theme=$v('e_theme');s.high=$v('e_high');s.improve=$v('e_improve');
  if(fl&&$("#e_slot"))s.slot=$v('e_slot');
  const ph=c.track==='phonics';
