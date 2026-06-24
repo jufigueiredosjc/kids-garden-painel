@@ -336,7 +336,7 @@ function moveStudentToClass(oldCid,name,newCid){if(!oldCid||!newCid||oldCid===ne
  oldS.forEach(function(s){if(!s.rows||s.rows[name]===undefined)return;var k=(s.date||'')+'|'+(s.slot||'');var ns=byKey[k];if(!ns){ns={date:s.date,slot:s.slot||'',theme:'',high:'',improve:'',rows:{}};newS.push(ns);byKey[k]=ns;}ns.rows=ns.rows||{};if(ns.rows[name]===undefined)ns.rows[name]=s.rows[name];delete s.rows[name];});
  newS.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
  STATE.addedStudents=STATE.addedStudents||{};STATE.addedStudents[newCid]=STATE.addedStudents[newCid]||[];if(STATE.addedStudents[newCid].indexOf(name)<0)STATE.addedStudents[newCid].push(name);if(STATE.addedStudents[oldCid])STATE.addedStudents[oldCid]=STATE.addedStudents[oldCid].filter(function(n){return n!==name;});
- ['students','archived','dollarAdj','dollarAdjNote','coordNotes','parentDevNote'].forEach(function(kk){var o=STATE[kk];if(!o)return;var ok=oldCid+'::'+name,nk=newCid+'::'+name;if(o[ok]!==undefined){o[nk]=o[ok];delete o[ok];}});
+ ['students','archived','dollarAdj','dollarAdjNote','coordNotes','parentDevNote','attnResolved'].forEach(function(kk){var o=STATE[kk];if(!o)return;var ok=oldCid+'::'+name,nk=newCid+'::'+name;if(o[ok]!==undefined){o[nk]=o[ok];delete o[ok];}});
  var sk=STATE.skills;if(sk&&sk[oldCid]){sk[newCid]=sk[newCid]||{};Object.keys(sk[oldCid]).forEach(function(per){var pm=sk[oldCid][per];if(pm&&pm[name]!==undefined){sk[newCid][per]=sk[newCid][per]||{};sk[newCid][per][name]=pm[name];delete pm[name];}});}
  tombstone('stu|'+oldCid+'|'+name);}
 function saveStudentMeta(cid,name){const f=($("#sm_full").value||'').trim();const dob=($("#sm_dob").value||'').trim();const sel=$("#sm_class");const newCid=sel?sel.value:cid;
@@ -458,7 +458,7 @@ const SEED_SKILLS={};
 const CLASS_BASE=JSON.parse(JSON.stringify(CLASSES));
 let STATE=load();
 try{applyClassMeta();}catch(e){}
-function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],trials:{},projects:{},unitsAdd:{},parentDevNote:{},tombstones:{}};}
+function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],trials:{},projects:{},unitsAdd:{},parentDevNote:{},attnResolved:{},tombstones:{}};}
 function load(){
  let s=null;
  try{const r=localStorage.getItem(LS_KEY);if(r)s=JSON.parse(r);}catch(e){}
@@ -514,7 +514,7 @@ function applyTombstones(m){var T=m&&m.tombstones;if(!T)return m;var any=false,k
 function mergeStatesForSave(base,loc){var m={},k;for(k in base)m[k]=base[k];for(k in loc)if(!(k in m))m[k]=loc[k];
  m.sessions=_mSessions(base.sessions||{},loc.sessions||{});m.addedStudents=_mAdded(base.addedStudents||{},loc.addedStudents||{});
  m.customClasses=_mById(base.customClasses||[],loc.customClasses||[]);m.teacherTasks=_mById(base.teacherTasks||[],loc.teacherTasks||[]);m.taskLog=_mById(base.taskLog||[],loc.taskLog||[]);m.patches=_mUniq(base.patches||[],loc.patches||[]);
- ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','projects','unitsAdd','parentDevNote'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
+ ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','projects','unitsAdd','parentDevNote','attnResolved'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
  m.tombstones=_mObj(base.tombstones||{},loc.tombstones||{});
  return applyTombstones(m);}
 async function cloudSave(){if(!sbClient)return;try{
@@ -661,17 +661,32 @@ function studentStats(id,name){
 function weakSkills(id,name){const sk=STATE.skills[id]||{};const dev=new Set();Object.values(sk).forEach(per=>{const r=per[name];if(r)Object.entries(r).forEach(([s,v])=>{if(v==="Developing")dev.add(s);});});return[...dev];}
 function strongSkills(id,name){const sk=STATE.skills[id]||{};const pr=new Set();Object.values(sk).forEach(per=>{const r=per[name];if(r)Object.entries(r).forEach(([s,v])=>{if(v==="Proficient"||v==="Confident")pr.add(s);});});return[...pr];}
 function lowTest(id,name){const c=getClass(id);const mx=testMaxFor(c);const thr=mx?mx*0.8:15;const t=STATE.tests[id]||{};let msg=null;Object.entries(t).forEach(([u,rows])=>rows.forEach(r=>{if(r.student===name&&r.score!=null&&r.score<thr)msg=mx?`Test ${u} below target (${r.score}/${mx})`:`Test ${u} below average (${r.score})`;}));return msg;}
-function attentionList(id){
- const c=getClass(id);if(c.fluent)return[];const out=[];
- activeStudents(c).forEach(n=>{const st=studentStats(id,n);const reasons=[];
+function attnReasons(id,name){const st=studentStats(id,name);const reasons=[];
   if(st.seen>=2&&st.attRate!=null&&st.attRate<70)reasons.push(`Low attendance (${st.attRate}%)`);
   if(st.a>=2)reasons.push(`${st.a} absences`);
   if(st.seen>=2&&st.hwRate!=null&&st.hwRate<60)reasons.push(`Homework gap (${st.hwRate}%)`);
-  const weak=weakSkills(id,n);if(weak.length)reasons.push(`Developing: ${weak.join(", ")}`);
-  const lt=lowTest(id,n);if(lt)reasons.push(lt);
-  if(reasons.length)out.push({name:n,reasons});});
- return out;
-}
+  const weak=weakSkills(id,name);if(weak.length)reasons.push(`Developing: ${weak.join(", ")}`);
+  const lt=lowTest(id,name);if(lt)reasons.push(lt);
+  return reasons;}
+function attentionList(id){const c=getClass(id);if(c.fluent)return[];const out=[];activeStudents(c).forEach(n=>{const reasons=attnReasons(id,n);if(reasons.length)out.push({name:n,reasons});});return out;}
+/* Resolve-for-now + auto re-alert. Resolving snapshots the child's current negatives; the child stays
+   off the active list UNLESS a NEW negative appears (a new absence, a new missed homework, a unit test
+   below target, or a new developing skill), in which case they are flagged again automatically. */
+function lowTestKeys(id,name){const c=getClass(id);const mx=testMaxFor(c);const thr=mx?mx*0.8:15;const t=STATE.tests[id]||{};const ks=[];Object.entries(t).forEach(([u,rows])=>rows.forEach(r=>{if(r.student===name&&r.score!=null&&r.score<thr&&ks.indexOf(u)<0)ks.push(u);}));return ks.sort();}
+function attnSnap(id,name){const st=studentStats(id,name);return {a:st.a,hm:st.hm,weak:weakSkills(id,name).slice().sort(),tests:lowTestKeys(id,name)};}
+function attnResolvedRec(id,name){return (STATE.attnResolved||{})[id+'::'+name]||null;}
+function attnStatus(id,name){const reasons=attnReasons(id,name);if(!reasons.length)return 'ok';const r=attnResolvedRec(id,name);if(!r)return 'active';const sn=attnSnap(id,name);const newIssue=(sn.a>(r.a||0))||(sn.hm>(r.hm||0))||sn.weak.some(w=>(r.weak||[]).indexOf(w)<0)||sn.tests.some(t=>(r.tests||[]).indexOf(t)<0);return newIssue?'active':'resolved';}
+function attnActiveList(id){return attentionList(id).filter(a=>attnStatus(id,a.name)==='active');}
+function attnResolvedList(id){return attentionList(id).filter(a=>attnStatus(id,a.name)==='resolved');}
+function resolveAttn(id,name){STATE.attnResolved=STATE.attnResolved||{};const sn=attnSnap(id,name);sn.ts=todayISO();sn.reasons=attnReasons(id,name);STATE.attnResolved[id+'::'+name]=sn;save();toast('✅ Marked resolved for now');renderClass(id);}
+function reopenAttn(id,name){STATE.attnResolved=STATE.attnResolved||{};delete STATE.attnResolved[id+'::'+name];save();toast('↩ Reopened — back to attention');renderClass(id);}
+function tabAttnResolved(id){const list=attnResolvedList(id);
+ if(!list.length)return '<div class="card"><h3>🚦 Resolved for now</h3><p class="muted">Nothing here right now. When you mark an attention item as resolved, it moves here, and it will alert again automatically if a new gap appears.</p></div>';
+ const rows=list.map(a=>{const ns=esc(a.name).replace(/'/g,"\\'");const r=attnResolvedRec(id,a.name)||{};const when=r.ts?(' · resolved '+esc(r.ts)):'';const was=(r.reasons&&r.reasons.length)?r.reasons.join(' · '):a.reasons.join(' · ');
+  return `<div class="flag ok" style="align-items:flex-start"><span class="fi">✅</span><div style="flex:1"><b>${esc(displayName(id,a.name))}</b> <span class="muted small">${when}</span><div class="small muted" style="margin-top:2px">Was flagged for: ${esc(was)}</div>${actionRows(id,a.name)}<div style="margin-top:6px"><button class="btn ghost sm" onclick="openStudent('${id}','${ns}','report')">📄 Report</button> <button class="btn ghost sm" onclick="openStudent('${id}','${ns}','history')">📜 History</button> <button class="btn ghost sm" onclick="reopenAttn('${id}','${ns}')">↩ Reopen attention</button></div></div></div>`;}).join('');
+ return `<div class="card"><h3>🚦 Resolved for now <span class="muted small">(${list.length})</span></h3>
+  <p class="hint">These children previously needed attention and were marked resolved, so they stay off the Overview to keep it clean. <b>They alert again automatically</b> on any new gap: a new absence, a missed homework, a unit test below target, or a new developing skill.</p>
+  ${rows}</div>`;}
 function pendingObs(id){const c=getClass(id);if(c.fluent)return[];const act=new Set(activeStudents(c));const out=[];sessionsOf(id).forEach(s=>{if(!s.date)return;const miss=[];const r=s.rows||{};let anyActiveObs=false;Object.keys(r).forEach(n=>{if(!act.has(n))return;const v=r[n]||{};if(v.obs&&String(v.obs).trim())anyActiveObs=true;if((v.att==='Present'||v.att==='Late')&&!(v.obs&&String(v.obs).trim()))miss.push(displayName(id,n));});
  if(!anyActiveObs){out.push({date:s.date,students:[],generalOnly:true});}
  else if(miss.length){out.push({date:s.date,students:miss});}});out.sort((a,b)=>(a.date||'').localeCompare(b.date||''));return out;}
@@ -868,6 +883,7 @@ function renderClass(id){
  tabs.push(['skills','🎯 Skills & Competencies']);
  if(hasTests(c))tabs.push(['tests',(c.mock?'🧪 Mock Tests':'🧪 Unit Tests')]);
  tabs.push(['history','📖 Edit Reports']);
+ if(attnResolvedList(id).length)tabs.push(['attnresolved','🚦 Resolved']);
  if(trialsForClass(id).length)tabs.push(['trial','🎒 Trial Class']);
  if(!tabs.some(t=>t[0]===CLASS_TAB))CLASS_TAB='overview';
  app().innerHTML=`
@@ -885,6 +901,7 @@ function renderClass(id){
  else if(CLASS_TAB==='skills')b.innerHTML=tabSkills(id);
  else if(CLASS_TAB==='tests')b.innerHTML=tabTests(id);
  else if(CLASS_TAB==='history')b.innerHTML=tabEditHistory(id);
+ else if(CLASS_TAB==='attnresolved')b.innerHTML=tabAttnResolved(id);
  else if(CLASS_TAB==='trial')b.innerHTML=tabTrial(id);
  const od=isOverdue(c);
  if(od.tracked&&od.overdue&&ALERTED!==id){ALERTED=id;setTimeout(()=>showOverdueModal(c,od),120);}
@@ -1372,7 +1389,8 @@ function tabOverview(id){
  else flags+=`<div class="flag ok"><span class="fi">✅</span><div><b>Reports up to date</b> with the school calendar. Last entry ${esc(od.last)}.</div></div>`;
  if(_gen.length){flags+=`<div class="flag" style="background:#FFEB3B;border-color:#FBC02D;color:#000"><span class="fi">📝</span><div style="color:#000"><b>${_gen.length} report${_gen.length>1?'s':''} need student observations.</b> These have a date in the history but no observation for any child yet (often only a general note) on: <b>${_gen.map(p=>esc(p.date)).join(', ')}</b>. Open <b>📖 Edit Reports</b> and add a note for each child.</div></div>`;}
  if(_stu.length){const _tot=_stu.reduce((x,p)=>x+p.students.length,0);flags+=`<div class="flag" style="background:#FFEB3B;border-color:#FBC02D;color:#000"><span class="fi">📝</span><div style="color:#000"><b>${_tot} observation${_tot>1?'s':''} pending.</b> A student attended but has no note yet on: <b>${_stu.map(p=>esc(p.date)).join(', ')}</b>. Open <b>📖 Edit Reports</b> to complete.</div></div>`;}
- att.forEach(a=>{const reasons=a.reasons.join(' · ');const ns=esc(a.name).replace(/'/g,"\\'");flags+=`<div class="flag warn"><span class="fi">🔎</span><div><b>${esc(a.name)}</b> needs attention — ${esc(reasons)}${actionRows(id,a.name)}<div style="margin-top:6px"><button class="btn ghost sm" onclick="actionModal('${id}','${ns}','${encodeURIComponent(reasons)}')">📝 Log action</button></div></div></div>`;});
+ attnActiveList(id).forEach(a=>{const reasons=a.reasons.join(' · ');const ns=esc(a.name).replace(/'/g,"\\'");flags+=`<div class="flag warn"><span class="fi">🔎</span><div><b>${esc(a.name)}</b> needs attention — ${esc(reasons)}${actionRows(id,a.name)}<div style="margin-top:6px"><button class="btn ghost sm" onclick="actionModal('${id}','${ns}','${encodeURIComponent(reasons)}')">📝 Log action</button> <button class="btn ghost sm" onclick="resolveAttn('${id}','${ns}')">✅ Resolve for now</button></div></div></div>`;});
+ (function(){const rc=attnResolvedList(id).length;if(rc)flags+=`<div class="flag ok"><span class="fi">🚦</span><div><b>${rc} resolved for now.</b> Moved to the <b>🚦 Resolved</b> tab to keep this view clean. They will alert again automatically on any new gap.</div></div>`;})();
  if(kd&&!KD_DISMISSED.has(id)){const goal=`<li>Semester goal: <b>$200</b> per child (Feb–Jun).</li><li>Expected by today: about <b>$${kd.expected}</b> (${kd.pct}% through the term).</li>`;if(kd.behind.length){flags+=`<div class="flag money"><span class="fi">💵</span><div><b>💵 Kid's Dollar tracker</b><ul style="margin:6px 0 0;padding-left:20px;line-height:1.6">${goal}<li><b>${kd.behind.length} child${kd.behind.length>1?'ren':''} below target:</b><ul style="margin:2px 0 0;padding-left:18px">${kd.behind.map(x=>{const ns=esc(x.name).replace(/'/g,"\\'");return `<li>${esc(displayName(id,x.name))} — <b>$${x.dollars}</b> (needs +$${x.gap}) <button class="btn ghost sm" onclick="editDollarModal('${id}','${ns}')">💵 Adjust</button></li>`;}).join('')}</ul></li><li class="muted">Ms Lidiane &amp; ${esc(c.teacher)}: reward these students in the coming classes so they catch up.</li></ul><p class="hint" style="margin:6px 0 0"><b>Adjust</b> sets a child's total manually and asks for a reason (e.g. recently joined, or doesn't do homework), so the change is on record.</p><div style="margin-top:6px"><button class="btn ghost sm" onclick="dismissKd('${id}')">✕ Dismiss</button></div></div></div>`;}else if(kd.expected>0){flags+=`<div class="flag money"><span class="fi">💵</span><div><b>💵 Kid's Dollar tracker</b><ul style="margin:6px 0 0;padding-left:20px;line-height:1.6">${goal}<li><b>All students on track. ✅</b></li></ul></div></div>`;}}
  const recent=sessionsOf(id).slice(-5).reverse();
  const studentsTable=`<div class="card"><h3>👧 Students — ${activeStudents(c).length}</h3>
@@ -1384,7 +1402,7 @@ function tabOverview(id){
        <td>${st.hwRate==null?'<span class="muted">—</span>':`<span class="badge ${st.hwRate>=80?'b-present':st.hwRate>=60?'b-late':'b-absent'}">${st.hwRate}%</span>`}</td>
        ${c.kidDollar?`<td>${(kd&&kd.expected>0)?`<span class="badge ${st.dollars<kd.target?'b-late':'b-present'}">$${st.dollars}</span>${st.dollars<kd.target?` <span class="muted small">/ $${kd.expected}</span>`:''}`:`$${st.dollars}`} <button class="btn ghost sm no-print" title="Edit Kid's Dollars" onclick="editDollarModal('${id}','${ns}')">✏️</button></td>`:''}
        <td>${weak.length?weak.map(w=>`<span class="chip">${esc(w)}</span>`).join(' '):'<span class="muted small">—</span>'}</td>
-       <td>${a?`<span class="badge b-late">🔎 Attention</span> <span class="small muted">${esc(a.reasons.join('; '))}</span>`:'<span class="badge b-prof">✓ On track</span>'}</td>
+       <td>${(()=>{const stt=attnStatus(id,n);if(stt==='active')return `<span class="badge b-late">🔎 Attention</span> <span class="small muted">${esc(attnReasons(id,n).join('; '))}</span>`;if(stt==='resolved')return '<span class="badge b-na">✓ Resolved for now</span>';return '<span class="badge b-prof">✓ On track</span>';})()}</td>
        <td style="white-space:nowrap"><button class="btn ghost sm" onclick="openStudent('${id}','${ns}','report')">📄 Report</button> <button class="btn ghost sm" onclick="openStudent('${id}','${ns}','history')">📜 History</button> <button class="btn ghost sm" onclick="editStudentModal('${id}','${ns}')">✏️</button> <button class="btn ghost sm" onclick="archiveStudent('${id}','${ns}')">📦 Archive</button></td></tr>`;}).join('')}
    </table></div>
    ${archivedOf(c).length?`<div style="margin-top:12px"><div class="small muted" style="margin-bottom:6px">📦 Archived (${archivedOf(c).length}) — not in reports or pending; history kept.</div><div class="tbl-wrap"><table>${archivedOf(c).map(n=>{const ns=esc(n).replace(/'/g,"\\'");const ai=archInfo(id,n)||{};return `<tr style="opacity:.6"><td><b>${esc(displayName(id,n))}</b> <span class="badge b-na">archived ${esc(ai.date||'')}</span></td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="openStudent('${id}','${ns}','history')">📜 History</button> <button class="btn ghost sm" onclick="unarchiveStudent('${id}','${ns}')">♻ Restore</button></td></tr>`;}).join('')}</table></div></div>`:''}
