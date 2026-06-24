@@ -2392,7 +2392,7 @@ function renderCoord(){
  else if(COORD_TAB==='trials')b.innerHTML=coordTrials();
  else if(COORD_TAB==='skills')b.innerHTML=coordSkills();
  else if(COORD_TAB==='structure')b.innerHTML=coordStructure();
- if(!COORD_ACT_POPPED){COORD_ACT_POPPED=true;setTimeout(function(){try{showCoordActionsPopup();}catch(e){}},80);}
+ if(!COORD_ACT_POPPED){COORD_ACT_POPPED=true;setTimeout(function(){try{if(!showLateReportsPopup())showCoordActionsPopup();}catch(e){}},80);}
 }
 function coordBirthdays(){
  const list=allBirthdays().sort((a,b)=>(a.days==null?999:a.days)-(b.days==null?999:b.days));
@@ -2449,6 +2449,20 @@ function coordActionsPanel(){
   ${open.length?`<div class="section-title">⏳ Open (${open.length})</div>`+open.map(card).join(''):'<div class="card"><p class="muted small">No open follow-ups. ✅</p></div>'}
   ${closed.length?`<div class="section-title">✅ Resolved (${closed.length})</div>`+closed.map(card).join(''):''}`;
 }
+/* Teachers behind on their daily reports — a scheduled class (from the calendar) passed with no report. */
+function lateTeachers(){const map={};CLASSES.forEach(c=>{if(c.special==='cambridge'||c.teacher==='Coordination')return;const o=isOverdue(c);if(o&&o.tracked&&o.overdue){(map[c.teacher||'—']=map[c.teacher||'—']||[]).push({name:c.name,missing:o.missing||1,gap:o.gap||0});}});return map;}
+/* Alert the coordinator the moment she opens the panel when 2+ teachers are behind. Returns true if shown. */
+function showLateReportsPopup(){const map=lateTeachers();const teachers=Object.keys(map);if(teachers.length<2)return false;
+ const ex=document.getElementById('latepop');if(ex)ex.remove();
+ const rows=teachers.sort().map(t=>{const cl=map[t];const tm=cl.reduce((a,x)=>a+(x.missing||1),0);const cls=cl.map(x=>esc(x.name)).join(', ');return `<li style="margin-bottom:3px"><b>${esc(t)}</b> <span class="muted small">— ${cls} · ${tm} report${tm>1?'s':''} pending</span></li>`;}).join('');
+ const w=document.createElement('div');w.id='latepop';w.className='od-overlay';w.style.background='rgba(4,35,66,.5)';
+ w.innerHTML=`<div class="od-box" style="border-color:#E8A33D;text-align:left;max-width:540px"><div class="od-ico">⏰</div><h2 style="color:#C77B16;font-size:20px">Daily reports are overdue</h2>
+  <p><b>${teachers.length} teachers</b> are behind on their daily reports. A scheduled class has passed without a report being logged, so some children's history is not up to date.</p>
+  <ul style="margin:8px 0 6px 18px;color:var(--navy)">${rows}</ul>
+  <p class="muted small">Please check in with them so every child's record stays current.</p>
+  <div style="margin-top:12px"><button class="btn" style="background:#E8A33D;border-color:#E8A33D" onclick="var m=document.getElementById('latepop');if(m)m.remove();setCoordTab('teachers');">⏰ See teacher coverage</button>
+  <button class="btn ghost" onclick="var m=document.getElementById('latepop');if(m)m.remove();">Dismiss</button></div></div>`;
+ document.body.appendChild(w);return true;}
 function showCoordActionsPopup(){const pend=coordPendingActions();if(!pend.length)return;const ex=document.getElementById('capop');if(ex)ex.remove();
  const w=document.createElement('div');w.id='capop';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
  w.innerHTML=`<div class="od-box"><div class="od-ico">🚦</div><h2>Student follow-ups need your review</h2>
