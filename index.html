@@ -490,7 +490,11 @@ function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(STATE));}catch(e)
 /* ===== Cloud (Supabase) + Login ===== */
 function _isObj(o){return o&&typeof o==='object'&&!Array.isArray(o);}
 function _mObj(a,b){if(!_isObj(a)||!_isObj(b))return b===undefined?a:b;var o={},k;for(k in a)o[k]=a[k];for(k in b)o[k]=(_isObj(a[k])&&_isObj(b[k]))?_mObj(a[k],b[k]):b[k];return o;}
-function _mSessions(a,b){var o={},c;for(c in a)o[c]=(a[c]||[]).slice();for(c in b){var arr=o[c]||(o[c]=[]);var ix={};arr.forEach(function(s,i){ix[(s.date||'')+'|'+(s.slot||'')]=i;});(b[c]||[]).forEach(function(s){var k=(s.date||'')+'|'+(s.slot||'');if(ix[k]!=null){var e=arr[ix[k]],m={},p;for(p in e)m[p]=e[p];for(p in s)m[p]=s[p];m.rows=_mObj(e.rows||{},s.rows||{});arr[ix[k]]=m;}else{arr.push(s);ix[k]=arr.length-1;}});}return o;}
+/* Session identity for cloud merge & deletions. Cambridge Prep keeps ALL exam levels under one class id,
+   so the key MUST include level (and the child for personalized) — otherwise two reports on the same date
+   collide and one overwrites the other. */
+function _sessKey(s){return (s.date||'')+'|'+(s.slot||'')+'|'+(s.level||'')+'|'+(s.personalized?(Object.keys(s.rows||{})[0]||'p'):'');}
+function _mSessions(a,b){var o={},c;for(c in a)o[c]=(a[c]||[]).slice();for(c in b){var arr=o[c]||(o[c]=[]);var ix={};arr.forEach(function(s,i){ix[_sessKey(s)]=i;});(b[c]||[]).forEach(function(s){var k=_sessKey(s);if(ix[k]!=null){var e=arr[ix[k]],m={},p;for(p in e)m[p]=e[p];for(p in s)m[p]=s[p];m.rows=_mObj(e.rows||{},s.rows||{});arr[ix[k]]=m;}else{arr.push(s);ix[k]=arr.length-1;}});}return o;}
 function _mAdded(a,b){var o={},c;for(c in a)o[c]=(a[c]||[]).slice();for(c in b){o[c]=o[c]||[];(b[c]||[]).forEach(function(n){if(o[c].indexOf(n)<0)o[c].push(n);});}return o;}
 function _mById(a,b){var o=(a||[]).slice(),ix={};o.forEach(function(x,i){if(x&&x.id!=null)ix[x.id]=i;});(b||[]).forEach(function(x){if(x&&x.id!=null&&ix[x.id]!=null)o[ix[x.id]]=x;else o.push(x);});return o;}
 function _mUniq(a,b){var o=(a||[]).slice();(b||[]).forEach(function(x){if(o.indexOf(x)<0)o.push(x);});return o;}
@@ -499,7 +503,7 @@ function _mUniq(a,b){var o=(a||[]).slice();(b||[]).forEach(function(x){if(o.inde
    from the cloud copy. Without these, deleting anything would "come back". */
 function tombstone(key){STATE.tombstones=STATE.tombstones||{};STATE.tombstones[key]=Date.now();}
 function applyTombstones(m){var T=m&&m.tombstones;if(!T)return m;var any=false,key;for(key in T){any=true;break;}if(!any)return m;
- if(m.sessions){for(var cid in m.sessions){m.sessions[cid]=(m.sessions[cid]||[]).filter(function(s){return !T['sess|'+cid+'|'+(s.date||'')+'|'+(s.slot||'')];});}}
+ if(m.sessions){for(var cid in m.sessions){m.sessions[cid]=(m.sessions[cid]||[]).filter(function(s){if(T['sess|'+cid+'|'+_sessKey(s)])return false;if(cid!=='cambridge_prep'&&T['sess|'+cid+'|'+(s.date||'')+'|'+(s.slot||'')])return false;return true;});}}
  if(m.addedStudents){for(var c2 in m.addedStudents){m.addedStudents[c2]=(m.addedStudents[c2]||[]).filter(function(n){return !T['stu|'+c2+'|'+n];});}}
  for(key in T){if(key.indexOf('stu|')===0){var pr=key.split('|'),sc=pr[1],sn=pr.slice(2).join('|');
    if(m.students)delete m.students[sc+'::'+sn];
@@ -950,7 +954,7 @@ function tabEditHistory(id){
    </table></div>`:`<p class="muted small">No reports${camb?' in this level':''} yet.</p>`}</div>`;
 }
 function editSession(id,i){EDIT_IDX=i;renderClass(id);}
-function deleteSession(id,i){const s=sessionsOf(id)[i];if(!confirm('⚠️ Permanently delete the report for '+(s&&s.date||'this class')+'?\n\nIt will be erased for everyone, in the cloud, and cannot be undone.'))return;if(s)tombstone('sess|'+id+'|'+(s.date||'')+'|'+(s.slot||''));STATE.sessions[id].splice(i,1);save();toast('🗑 Report permanently deleted');EDIT_IDX=null;renderClass(id);}
+function deleteSession(id,i){const s=sessionsOf(id)[i];if(!confirm('⚠️ Permanently delete the report for '+(s&&s.date||'this class')+'?\n\nIt will be erased for everyone, in the cloud, and cannot be undone.'))return;if(s)tombstone('sess|'+id+'|'+_sessKey(s));STATE.sessions[id].splice(i,1);save();toast('🗑 Report permanently deleted');EDIT_IDX=null;renderClass(id);}
 function addMissedSession(id){const el=$("#add_date");const d=el&&el.value;if(!d){toast('Pick a date first');return;}const c=getClass(id);
  let entry;
  if(c.fluent){const slot=($("#add_slot")&&$("#add_slot").value)||c.slots[0];entry={date:d,slot,theme:FLUENT_THEMES[d]||'',high:'',improve:'',rows:{}};fluentActive(slot).forEach(n=>{entry.rows[n]={att:'Present',obs:''};});}
