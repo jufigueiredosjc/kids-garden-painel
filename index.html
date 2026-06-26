@@ -599,7 +599,7 @@ function applyClassMeta(){
   if(ov.online!==undefined)c.online=!!ov.online;
   if(ov.kidDollar!==undefined)c.kidDollar=!!ov.kidDollar;
   if(ov.count!==undefined)c.count=!!ov.count;});
- CLASSES.length=0;base.forEach(c=>CLASSES.push(c));
+ CLASSES.length=0;base.sort(classCmp).forEach(c=>CLASSES.push(c));
  try{syncAdded();}catch(e){}
 }
 function sessionsOf(id){return STATE.sessions[id]||[];}
@@ -879,14 +879,18 @@ function classAgeNum(c){const L=LEVELS[c.level]||{};const a=String(c.age||L.age|
 function classTimeRank(c){const t=String(c.time||'').toUpperCase();if(t.indexOf('AM')>=0)return 0;if(t.indexOf('PM')>=0)return 1;return 2;}
 function isSpecialClass(c){return c.special==='cambridge'||!!c.fluent||c.id==='pietro_1on1'||c.level==='Private';}
 function specialOrder(c){return c.special==='cambridge'?0:(c.fluent?1:2);}
-function sortedClasses(){return CLASSES.slice().sort((a,b)=>{
+/* Canonical class ordering used EVERYWHERE: by age (youngest first), then AM before PM, then name;
+   special classes (Cambridge, Fluent, Private) last. Applied to the live CLASSES list itself in
+   applyClassMeta, so every table/list/dropdown inherits it and new classes slot in by age automatically. */
+function classCmp(a,b){
   const sa=isSpecialClass(a)?1:0,sb=isSpecialClass(b)?1:0;
   if(sa!==sb)return sa-sb;
   if(sa)return specialOrder(a)-specialOrder(b)||((a.name||'').localeCompare(b.name||''));
   const ag=classAgeNum(a)-classAgeNum(b);if(ag)return ag;
   const tr=classTimeRank(a)-classTimeRank(b);if(tr)return tr;
   return (a.name||'').localeCompare(b.name||'');
-});}
+}
+function sortedClasses(){return CLASSES.slice().sort(classCmp);}
 function cardForClass(c){
  const L=LEVELS[c.level];const od=isOverdue(c);const ns=sessionsOf(c.id).length;
  let status;
