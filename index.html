@@ -641,10 +641,28 @@ function daysSince(iso){if(!iso)return 999;return Math.floor((Date.now()-new Dat
 function lastSessionDate(id){const s=sessionsOf(id);if(!s.length)return null;return s.map(x=>x.date).filter(Boolean).sort().slice(-1)[0];}
 /* Calendar-based overdue: a class is behind only when a scheduled lesson date (from the
    School Calendar, which already excludes holidays & vacation) has passed with no report. */
+/* Weekday of a YYYY-MM-DD date (noon-safe against timezones). */
+function _wd(d){return new Date(d+'T12:00:00').getDay();}
+/* Parse a class "days" label (e.g. "Wed & Fri", "Tue & Thu", "Mon") into weekday numbers. */
+function daysToWeekdays(s){s=String(s||'');var M={Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6},out=[],k;for(k in M){if(new RegExp(k,'i').test(s))out.push(M[k]);}return out;}
+/* Calendar for ANY class so every class (incl. custom/new ones like Toddlers) is tracked, not just the
+   hardcoded SCHEDULE ones. Falls back to the real school-calendar dates that land on the class's weekdays
+   (so holidays/vacation stay excluded), clipped to start at the class's first report. Read-only. */
+function scheduleFor(c){
+ if(!c)return [];
+ if(SCHEDULE[c.id]&&SCHEDULE[c.id].length)return SCHEDULE[c.id];
+ var wds=daysToWeekdays(c.days);if(!wds.length)return [];
+ var all={},k;for(k in SCHEDULE){(SCHEDULE[k]||[]).forEach(function(d){if(wds.indexOf(_wd(d))>=0)all[d]=1;});}
+ var arr=Object.keys(all).sort();
+ var dates=sessionsOf(c.id).map(function(s){return s.date;}).filter(Boolean).sort();
+ if(dates.length)arr=arr.filter(function(d){return d>=dates[0];});
+ else if(arr.length>8)arr=arr.slice(-8);
+ return arr;
+}
 function isOverdue(c){
  const reps=sessionsOf(c.id).map(s=>s.date).filter(Boolean).sort();
  const last=reps.length?reps[reps.length-1]:null;
- const sched=SCHEDULE[c.id];
+ const sched=scheduleFor(c);
  if(!sched||!sched.length)return{tracked:false,overdue:false,last,gap:0,missing:0,totalMissing:0};
  const today=todayISO();
  const near=d=>reps.some(r=>Math.abs((new Date(d)-new Date(r))/864e5)<=3);
