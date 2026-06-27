@@ -1582,7 +1582,7 @@ function savePersonalizedReport(id){try{
 function tabSkills(id){
  const c=getClass(id);const set=SKILLSETS[c.level]||SKILLSETS.K1;const comps=COMPETENCIES[c.level]||{};
  if(c.track==="none")return tabSkillsSimple(id);
- if(c.track==="nursery")return tabSkillsNursery(id);
+ if(c.track==="nursery")return tabSkillsNursery(id)+projectsSection(c);
  if(c.track==="phonics")return tabSkillsPhonics(id)+projectsSection(c);
  const items=trackItems(c);const skl=STATE.skills[id]||{};
  const periodTabs=items.map((it,i)=>{const done=skl[i]&&Object.keys(skl[i]).length;return `<button class="unit-tab ${CUR_PERIOD===i?'active':''} ${done?'done':''}" onclick="setPeriod(${i},'${id}')">${esc(it)}${done?' ✓':''}</button>`;}).join('');
@@ -1635,7 +1635,7 @@ function tabSkillsSimple(id){
   <div class="flag ok"><span class="fi">💬</span><div>Focus: <b>Participation · Oral fluency · Vocabulary · Structures · Comprehension · Overall conversational development.</b></div></div></div>`;
 }
 /* NURSERY — project-based developmental observation (no phonics, no pass/fail) */
-let NURSERY_PROJ=0; // default = first project (Adaptation)
+let NURSERY_PROJ=1; // default = Birds (current)
 let KINDER_PROJ=0; // Kinder & Kinder Plus project-based skills (0 = current project)
 const KINDER_PROJECTS=[
  {name:"Birds",status:"current",emoji:"🐦",lessons:9,
@@ -1689,16 +1689,14 @@ function nurseryGuideInner(){return `
    <p class="small" style="margin-top:6px"><b>When to ask for support:</b> only if a child seems <b>persistently distressed, disengaged, or not understanding routines</b> after they’ve had time to settle in. Otherwise, keep it joyful.</p>`;}
 function tabSkillsNursery(id){
  const c=getClass(id);const domains=SKILLSETS.Nursery;const ud=(STATE.skills[id]||{})[0]||{};
- const projs=nurseryProjList(c);
- if(NURSERY_PROJ>=projs.length||NURSERY_PROJ<0)NURSERY_PROJ=0;
- const sel=projs[NURSERY_PROJ]||{name:'',skills:[]};
- const projBtns=projs.map((p,i)=>`<button class="unit-tab ${i===NURSERY_PROJ?'active':''}" onclick="setNurseryProj(${i},'${id}')">${esc(p.emoji||'📘')} ${esc(p.name)}</button>`).join('');
- const sk=sel.skills||[];
+ if(NURSERY_PROJ>=NURSERY_PROJECTS.length)NURSERY_PROJ=1;
+ const sel=NURSERY_PROJECTS[NURSERY_PROJ];
+ const projBtns=NURSERY_PROJECTS.map((p,i)=>{const tag=p.status==='current'?' · now':p.status==='done'?' · done':' · soon';return `<button class="unit-tab ${i===NURSERY_PROJ?'active':''} ${p.status==='current'?'done':''}" onclick="setNurseryProj(${i},'${id}')">${p.emoji} ${esc(p.name)}<span class="muted small" style="font-weight:600">${tag}</span></button>`;}).join('');
  let projComp;
- if(sk.length){
-   projComp=`<div class="comp"><ul style="margin:4px 0 0 18px">${sk.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
+ if(Object.keys(sel.comp||{}).length){
+   projComp=Object.entries(sel.comp).map(([k,v])=>`<div class="comp"><h5>${esc(k)}</h5><ul>${v.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
  }else{
-   projComp=`<div class="flag ok"><span class="fi">📝</span><div>No competencies added to <b>${esc(sel.name)}</b> yet. Coordination can add them in <b>Coordination → 🎯 Skills &amp; Competencies</b> (choose <b>${esc(c.name)}</b>).</div></div>`;
+   projComp=`<div class="flag warn"><span class="fi">🗓</span><div>The <b>${esc(sel.name)}</b> project starts in the 2nd semester${sel.lessons?` (${sel.lessons} lessons)`:''}. Its competencies will be added here when you begin it.</div></div>`;
  }
  const opt={"Not yet":"🌱 Not yet","Emerging":"🌿 Emerging","Confident":"🌸 Confident"};
  const grid=`<div class="tbl-wrap"><table><tr><th>Child</th>${domains.map(d=>`<th>${esc(d)}</th>`).join('')}</tr>
@@ -1706,13 +1704,13 @@ function tabSkillsNursery(id){
      return `<td><select class="att-sel" onchange="setSkill('${id}',0,${si},'${esc(d)}',this.value)">${NURSERY_SCALE.map(r=>`<option value="${r}" ${r===v?'selected':''}>${opt[r]}</option>`).join('')}</select></td>`;}).join('')}</tr>`;}).join('')}
    </table></div>`;
  return `
-  <div class="card"><h3>🎯 ${esc(c.name)} — projects &amp; development</h3>
-   <div class="flag ok"><span class="fi">🧭</span><div><b>How to use this page:</b><br>1️⃣ Pick the project below.<br>2️⃣ Read what children develop in it.<br>3️⃣ In the snapshot, choose where each child is right now — 🌱 Not yet · 🌿 Emerging · 🌸 Confident. A picture of growth, never a grade.<br><span class="muted small">Coordination can rename these projects and add their competencies in Skills &amp; Competencies (choose ${esc(c.name)}).</span></div></div>
+  <div class="card"><h3>🐦 Nursery projects & development</h3>
+   <div class="flag ok"><span class="fi">🧭</span><div><b>How to use this page — 3 quick steps:</b><br>1️⃣ Pick the project below (<b>Birds</b> is the current one).<br>2️⃣ Read what children develop in that project.<br>3️⃣ In the snapshot, choose where each child is right now — 🌱 Not yet · 🌿 Emerging · 🌸 Confident. It’s a picture of growth, never a grade.</div></div>
    <div class="unit-tabs" style="margin-top:10px">${projBtns}</div></div>
-  <div class="card"><h3>${esc(sel.emoji||'📘')} ${esc(sel.name)} — what children develop</h3>
+  <div class="card"><h3>${sel.emoji} ${esc(sel.name)} — what children develop</h3>
    <p class="hint">Project criteria all children are gently observed against (no pass/fail).</p>${projComp}</div>
   <div class="card"><h3>👀 Developmental snapshot</h3>
-   <p class="hint">For each child, choose where they are <b>right now</b>. <b>🌱 Not yet</b> = haven’t seen it · <b>🌿 Emerging</b> = starting to show it · <b>🌸 Confident</b> = does it happily & often. “Project focus” relates to the current project.</p>
+   <p class="hint">For each child, choose where they are <b>right now</b>. <b>🌱 Not yet</b> = haven’t seen it · <b>🌿 Emerging</b> = starting to show it · <b>🌸 Confident</b> = does it happily & often. “Project focus” relates to the current project (Birds).</p>
    ${grid}
    <div class="no-print" style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn" onclick="saveAssessment('${id}','Snapshot')">💾 Save snapshot</button> <span class="muted small">Saves as you choose; click to confirm — shows in the child's report.</span></div></div>
   <div class="acc"><div class="acc-h" onclick="this.parentNode.classList.toggle('open')">🧠 How we look at development at 2–3 (tap to open the specialist guide)<span class="ar">▶</span></div>
@@ -2117,11 +2115,6 @@ function trialTeacherComment(mid,cid){const m=trialById(mid);if(!m)return;const 
    Stored isolated in STATE.projects[level]; full autonomy (create/edit/delete/publish). ===== */
 let COORD_SKILL_LEVEL='';
 function levelProjects(lvl){STATE.projects=STATE.projects||{};return STATE.projects[lvl]||[];}
-const DEFAULT_NURSERY_PROJECTS=[{name:"Adaptation",emoji:"🌱"},{name:"Project 1 (soon)",emoji:"📘"},{name:"Project 2 (soon)",emoji:"📗"},{name:"Project 3 (soon)",emoji:"📙"}];
-/* Toddlers/Nursery project framework: coordination-managed per class NAME; falls back to a starter
-   framework (Adaptation + Project 1-3) so the panel is ready and coordination can rename & add skills. */
-function nurseryProjList(c){const ps=levelProjects(c.name);return (ps&&ps.length)?ps:DEFAULT_NURSERY_PROJECTS;}
-function seedNurseryProjects(){const lvl=COORD_SKILL_LEVEL;if(!lvl)return;STATE.projects=STATE.projects||{};const cur=(STATE.projects[lvl]||[]).slice();const have=cur.map(function(p){return String(p.name||'').trim().toLowerCase();});let added=0;DEFAULT_NURSERY_PROJECTS.forEach(function(p,i){if(have.indexOf(p.name.trim().toLowerCase())<0){cur.push({id:'pj'+Date.now()+i+Math.random().toString(36).slice(2,5),name:p.name,skills:[]});added++;}});STATE.projects[lvl]=cur;save();toast(added?('✅ '+added+' starter project(s) added — rename & add competencies as needed'):'All starter projects already exist');renderCoord();}
 /* Skills & Competencies group by the class NAME (so K4 AM & K4 PM share, but Nursery and Toddlers stay separate). The assessment framework still comes from the class level. */
 function skillLevelOf(key){const c=CLASSES.find(x=>x.name===key&&!x.fluent&&x.special!=='cambridge');return c?c.level:'';}
 function skillSetFor(key){return SKILLSETS[skillLevelOf(key)]||[];}
@@ -2141,9 +2134,9 @@ function coordSkills(){
    <div class="row c2"><div><label class="fl">Class</label><select class="inp" id="csk_level" onchange="COORD_SKILL_LEVEL=this.value;renderCoord()">${names.map(nm=>{const L2=skillLevelOf(nm);return `<option value="${esc(nm)}" ${nm===lvl?'selected':''}>${esc(nm)}${L2?' ('+esc(L2)+(LEVELS[L2]?' · '+esc(LEVELS[L2].age):'')+')':''}</option>`;}).join('')}</select></div>
      <div><label class="fl">Groups sharing this</label><input class="inp" value="${esc(classesOfLevel.map(c=>c.name+' '+c.time).join(', ')||'—')}" disabled></div></div>
    <div class="flag ok" style="margin-top:10px"><span class="fi">📚</span><div><b>Existing framework, ${esc(skillStructureLabel(skillLevelOf(lvl)))} (not editable here):</b> ${set.length?set.map(s=>esc(s)).join(' · '):'—'}</div></div></div>
-  <div class="card"><h3>🎨 Projects — ${esc(lvl)} <button class="btn orange sm no-print" style="float:right" onclick="addProjectModal('${esc(lvl)}')">➕ Add project</button>${skillLevelOf(lvl)==='Nursery'?`<button class="btn ghost sm no-print" style="float:right;margin-right:6px" onclick="seedNurseryProjects()">📋 Add starter projects</button>`:''}</h3>
+  <div class="card"><h3>🎨 Projects — ${esc(lvl)} <button class="btn orange sm no-print" style="float:right" onclick="addProjectModal('${esc(lvl)}')">➕ Add project</button></h3>
    <p class="hint">Each project has its own skills/competencies. Follow the can-do writing style (e.g. “Uses project vocabulary in short sentences”).</p>
-   ${projects.length?projects.map(p=>`<div class="comp" style="border-color:var(--green)"><h5>📌 ${esc(p.name)} <span class="no-print" style="float:right;font-weight:600"><button class="btn ghost sm" onclick="addProjectModal('${esc(lvl)}','${p.id}')">✏️ Edit</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteProject('${esc(lvl)}','${p.id}')">🗑 Delete</button></span></h5>${p.skills&&p.skills.length?`<ul style="margin:4px 0 0 18px">${p.skills.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:'<p class="muted small">No skills added yet.</p>'}</div>`).join(''):'<p class="muted small">No projects yet. Click “➕ Add project”, or “📋 Add starter projects” above.</p>'}
+   ${projects.length?projects.map(p=>`<div class="comp" style="border-color:var(--green)"><h5>📌 ${esc(p.name)} <span class="no-print" style="float:right;font-weight:600"><button class="btn ghost sm" onclick="addProjectModal('${esc(lvl)}','${p.id}')">✏️ Edit</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteProject('${esc(lvl)}','${p.id}')">🗑 Delete</button></span></h5>${p.skills&&p.skills.length?`<ul style="margin:4px 0 0 18px">${p.skills.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:'<p class="muted small">No skills added yet.</p>'}</div>`).join(''):'<p class="muted small">No projects yet. Click “➕ Add project” to create one.</p>'}
   </div>
   ${unitsLevel?`<div class="card"><h3>📚 Units — ${esc(lvl)} <button class="btn sm no-print" style="float:right;background:#2C6FB0;border-color:#2C6FB0;color:#fff" onclick="addUnitModal('${esc(lvl)}')">➕ Add unit</button></h3>
    <p class="hint">Add a unit and its competencies organised by skill (${esc(unitSkillsFor(lvl).join(', '))}). The pre-formatted units already in the system stay untouched.</p>
