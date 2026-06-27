@@ -1582,7 +1582,7 @@ function savePersonalizedReport(id){try{
 function tabSkills(id){
  const c=getClass(id);const set=SKILLSETS[c.level]||SKILLSETS.K1;const comps=COMPETENCIES[c.level]||{};
  if(c.track==="none")return tabSkillsSimple(id);
- if(c.track==="nursery")return tabSkillsNursery(id)+projectsSection(c);
+ if(c.track==="nursery")return tabSkillsNursery(id);
  if(c.track==="phonics")return tabSkillsPhonics(id)+projectsSection(c);
  const items=trackItems(c);const skl=STATE.skills[id]||{};
  const periodTabs=items.map((it,i)=>{const done=skl[i]&&Object.keys(skl[i]).length;return `<button class="unit-tab ${CUR_PERIOD===i?'active':''} ${done?'done':''}" onclick="setPeriod(${i},'${id}')">${esc(it)}${done?' ✓':''}</button>`;}).join('');
@@ -1687,8 +1687,41 @@ function nurseryGuideInner(){return `
    <hr class="sep">
    <p class="small"><b>How to analyse (not grade):</b> observe what each child does <b>spontaneously across several classes</b>, not in one moment. Look for the <b>trend</b> — from “Not yet” to “Emerging” to “Confident” — and celebrate small wins. Use it to plan the next playful step, not to rank children.</p>
    <p class="small" style="margin-top:6px"><b>When to ask for support:</b> only if a child seems <b>persistently distressed, disengaged, or not understanding routines</b> after they’ve had time to settle in. Otherwise, keep it joyful.</p>`;}
-function tabSkillsNursery(id){
+/* A nursery-age class that has its OWN projects (independent of the shared Nursery curriculum).
+   Same developmental snapshot framework; only the projects come from the class's own list (coordination-managed). */
+function tabSkillsOwnProjects(id){
  const c=getClass(id);const domains=SKILLSETS.Nursery;const ud=(STATE.skills[id]||{})[0]||{};
+ const own=levelProjects(c.name);
+ if(NURSERY_PROJ>=own.length||NURSERY_PROJ<0)NURSERY_PROJ=0;
+ const sel=own[NURSERY_PROJ]||own[0]||{name:'',skills:[]};
+ const projBtns=own.map((p,i)=>`<button class="unit-tab ${i===NURSERY_PROJ?'active':''}" onclick="setNurseryProj(${i},'${id}')">📘 ${esc(p.name)}</button>`).join('');
+ const sk=sel.skills||[];
+ const projComp=sk.length?`<div class="comp"><ul style="margin:4px 0 0 18px">${sk.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:`<div class="flag ok"><span class="fi">📝</span><div>No competencies added to <b>${esc(sel.name)}</b> yet. Coordination can add them in <b>Coordination → 🎯 Skills &amp; Competencies</b> (choose <b>${esc(c.name)}</b>).</div></div>`;
+ const opt={"Not yet":"🌱 Not yet","Emerging":"🌿 Emerging","Confident":"🌸 Confident"};
+ const grid=`<div class="tbl-wrap"><table><tr><th>Child</th>${domains.map(d=>`<th>${esc(d)}</th>`).join('')}</tr>
+   ${activeStudents(c).map((n,si)=>{const sr=ud[n]||{};return `<tr><td><b>${esc(displayName(id,n))}</b></td>${domains.map(d=>{const v=sr[d]||'Not yet';
+     return `<td><select class="att-sel" onchange="setSkill('${id}',0,${si},'${esc(d)}',this.value)">${NURSERY_SCALE.map(r=>`<option value="${r}" ${r===v?'selected':''}>${opt[r]}</option>`).join('')}</select></td>`;}).join('')}</tr>`;}).join('')}
+   </table></div>`;
+ return `
+  <div class="card"><h3>🎯 ${esc(c.name)} — projects &amp; development</h3>
+   <div class="flag ok"><span class="fi">🧭</span><div><b>How to use this page:</b><br>1️⃣ Pick the project below.<br>2️⃣ Read what children develop in it.<br>3️⃣ In the snapshot, choose where each child is right now — 🌱 Not yet · 🌿 Emerging · 🌸 Confident. A picture of growth, never a grade.<br><span class="muted small">Coordination renames these projects and adds their competencies in Skills &amp; Competencies (choose ${esc(c.name)}).</span></div></div>
+   <div class="unit-tabs" style="margin-top:10px">${projBtns}</div></div>
+  <div class="card"><h3>📘 ${esc(sel.name)} — what children develop</h3>
+   <p class="hint">Project criteria all children are gently observed against (no pass/fail).</p>${projComp}</div>
+  <div class="card"><h3>👀 Developmental snapshot</h3>
+   <p class="hint">For each child, choose where they are <b>right now</b>. <b>🌱 Not yet</b> = haven’t seen it · <b>🌿 Emerging</b> = starting to show it · <b>🌸 Confident</b> = does it happily &amp; often.</p>
+   ${grid}
+   <div class="no-print" style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn" onclick="saveAssessment('${id}','Snapshot')">💾 Save snapshot</button> <span class="muted small">Saves as you choose; click to confirm — shows in the child's report.</span></div></div>
+  <div class="acc"><div class="acc-h" onclick="this.parentNode.classList.toggle('open')">🧠 How we look at development at 2–3 (tap to open the specialist guide)<span class="ar">▶</span></div>
+   <div class="acc-b">${nurseryGuideInner()}</div></div>`;
+}
+function tabSkillsNursery(id){
+ const c=getClass(id);
+ /* If this class has its OWN projects (with real competencies), it is disassociated from the shared
+    Nursery curriculum and uses its own framework. Otherwise it falls through to the ORIGINAL Nursery
+    rendering below, completely unchanged. */
+ if(levelProjects(c.name).some(function(p){return (p.skills||[]).length;}))return tabSkillsOwnProjects(id);
+ const domains=SKILLSETS.Nursery;const ud=(STATE.skills[id]||{})[0]||{};
  if(NURSERY_PROJ>=NURSERY_PROJECTS.length)NURSERY_PROJ=1;
  const sel=NURSERY_PROJECTS[NURSERY_PROJ];
  const projBtns=NURSERY_PROJECTS.map((p,i)=>{const tag=p.status==='current'?' · now':p.status==='done'?' · done':' · soon';return `<button class="unit-tab ${i===NURSERY_PROJ?'active':''} ${p.status==='current'?'done':''}" onclick="setNurseryProj(${i},'${id}')">${p.emoji} ${esc(p.name)}<span class="muted small" style="font-weight:600">${tag}</span></button>`;}).join('');
