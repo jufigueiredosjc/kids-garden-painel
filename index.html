@@ -2919,6 +2919,28 @@ function parentDevEditPanel(cid,name){const f=parentFirst(cid,name);STATE.parent
   <textarea class="inp" id="pdn_text" rows="6" style="width:100%;min-height:140px">${esc(parentDevNoteText(cid,name))}</textarea>
   <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" onclick="saveParentDevNote('${cid}','${ns}')">💾 Save my version</button> <button class="btn ghost" onclick="resetParentDevNote('${cid}','${ns}')">↺ Reset to automatic</button> <span class="muted small">${ov?'Currently showing your edited version.':'Currently showing the automatic version.'}</span></div>
  </div>`;}
+/* Skills development as a warm, per-child AI reading (for nursery-age reports like Toddlers). Reads the
+   child's own developmental snapshot + history, always highlights strengths, and varies by child (seed). */
+function parentSkillsNarrative(cid,name){
+ const c=getClass(cid);const f=parentFirst(cid,name);const seed=seedOf(cid,name);
+ const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};
+ const domains=SKILLSETS[c.level]||[];
+ const confident=domains.filter(function(d){return snap[d]==='Confident';});
+ const emerging=domains.filter(function(d){return snap[d]==='Emerging';});
+ const assessed=domains.filter(function(d){return snap[d]&&snap[d]!=='Not yet';});
+ let obs='';try{sessionsOf(cid).forEach(function(s){const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}
+ const b=obs.toLowerCase();
+ if(!assessed.length&&!obs.trim())return `${f}'s development snapshot will appear here once the first observations are recorded.`;
+ let s=pickN([`In ${f}'s development snapshot, we already see lovely growth.`,`Looking at how ${f} is developing, there is a lot to celebrate.`,`${f} is blossoming, and the snapshot shows it beautifully.`,`${f}'s little steps are adding up to real, joyful growth.`],seed)+' ';
+ if(confident.length){const list=andList(confident);s+=pickN([`${f} shows real confidence in ${list}, doing it happily and often.`,`We see ${f} especially secure in ${list}, a genuine strength.`,`${list} ${confident.length>1?'are':'is'} already a strong point for ${f}.`],seed>>3)+' ';}
+ if(emerging.length){const list=andList(emerging);s+=pickN([`${list} ${emerging.length>1?'are':'is'} blossoming nicely, and with gentle, playful practice ${f} keeps growing.`,`${f} is showing ${list} more and more, which is wonderful to watch unfold.`],seed>>5)+' ';}
+ if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(b))s+=pickN([`In class, ${f} takes part with real joy and curiosity.`,`${f} joins the activities with a happy, willing spirit.`],seed>>7)+' ';
+ else if(/help|kind|friend|share|caring|polite|social/.test(b))s+=`${f} is caring and warm with friends, a lovely presence in the group. `;
+ else if(/song|music|dance|sing|move|motor|craft|paint/.test(b))s+=`${f} lights up with songs, movement and hands-on play, which is exactly how skills grow at this age. `;
+ if(!confident.length&&!emerging.length)s+=`Every child grows at their own pace, and ${f} is settling in beautifully, gaining new skills little by little. `;
+ else s+=`We will keep nurturing each area gently, always celebrating ${f}'s progress. `;
+ return s.trim();
+}
 function parentReportCard(cid,name){
  const c=getClass(cid);const L=LEVELS[c.level]||{};const st=studentStats(cid,name);const set=SKILLSETS[c.level]||SKILLSETS.K1;
  const skl=STATE.skills[cid]||{};const skillSummary={};
@@ -2939,7 +2961,7 @@ function parentReportCard(cid,name){
      <div class="stat blue"><div class="n">${st.attRate==null?'—':st.attRate+'%'}</div><div class="l">Attendance</div></div>
      <div class="stat"><div class="n">${st.seen}</div><div class="l">Classes recorded</div></div></div>
    <hr class="sep"><h3>🎯 Skills development</h3>
-   ${Object.keys(skillSummary).length?`<div class="tbl-wrap"><table><tr>${set.map(s=>`<th>${esc(s)}</th>`).join('')}</tr><tr>${set.map(s=>{const v=skillSummary[s]||'Not assessed';return `<td><span class="badge ${ratingClass(v)}">${esc(v)}</span></td>`;}).join('')}</tr></table></div>`:'<p class="muted small">Skills will appear after the first assessment.</p>'}
+   ${c.track==='nursery'?(()=>{const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};const chips=set.map(s=>{const v=snap[s]||'Not yet';const e=v==='Confident'?'🌸':v==='Emerging'?'🌿':'🌱';return `<span class="chip">${e} ${esc(s)}</span>`;}).join(' ');return `<div style="margin-bottom:6px">${chips}</div><div class="narr">${esc(parentSkillsNarrative(cid,name))}</div>`;})():(Object.keys(skillSummary).length?`<div class="tbl-wrap"><table><tr>${set.map(s=>`<th>${esc(s)}</th>`).join('')}</tr><tr>${set.map(s=>{const v=skillSummary[s]||'Not assessed';return `<td><span class="badge ${ratingClass(v)}">${esc(v)}</span></td>`;}).join('')}</tr></table></div>`:'<p class="muted small">Skills will appear after the first assessment.</p>')}
    ${hasTests(c)?parentTestsSection(cid,name,tests):''}
    <hr class="sep"><h3>⭐ Highlights</h3>
    ${parentHighlights(cid,name)}
