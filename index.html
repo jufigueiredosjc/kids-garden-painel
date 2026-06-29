@@ -2728,7 +2728,7 @@ function progressReport(cid,name,opts){
      <div class="stat"><div class="n">${st.seen}</div><div class="l">Classes recorded</div></div>
      ${c.kidDollar?`<div class="stat purple"><div class="n">$${st.dollars}</div><div class="l">Kid's Dollars earned</div></div>`:''}</div>
    <hr class="sep"><h3>🎯 Skills development</h3>
-   ${c.track==='nursery'?(()=>{const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};const chips=set.map(s=>{const v=snap[s]||'Not yet';const e=v==='Confident'?'🌸':v==='Emerging'?'🌿':'🌱';return `<span class="chip">${e} ${esc(s)}</span>`;}).join(' ');return `<div style="margin-bottom:6px">${chips}</div><div class="narr">${esc(parentSkillsNarrative(cid,name))}</div>`;})():(Object.keys(skillSummary).length?`<div class="tbl-wrap"><table><tr>${set.map(s=>`<th>${esc(s)}</th>`).join('')}</tr><tr>${set.map(s=>{const v=skillSummary[s]||'Not assessed';return `<td><span class="badge ${ratingClass(v)}">${esc(v)}</span></td>`;}).join('')}</tr></table></div>`:'<p class="muted small">Skills will appear once the teacher completes an end-of-unit assessment.</p>')}
+   ${reportSkillsHtml(cid,name,'coord')}
    ${c.track==='phonics'?`<hr class="sep">${phonicsProgressCard(cid,name)}`:c.track==='nursery'?'':`<hr class="sep"><h3>🧪 ${esc(testName(c))}s</h3>${tests.length?`<div class="tbl-wrap"><table><tr><th>${esc(testName(c))}</th><th>Level</th><th>Score</th><th>Feedback</th></tr>${tests.map(t=>`<tr><td>${esc(t.u)}</td><td>${esc(t.level||'Basic')}</td><td>${t.score==null?'—':esc(t.score)}</td><td class="small">${esc(t.feedback||'')}</td></tr>`).join('')}</table></div>`:'<p class="muted small">No tests recorded yet.</p>'}`}
    <hr class="sep"><h3>⭐ Key highlights — what to know fast</h3>
    ${(()=>{const H=synthHighlights(cid,name);if(!H.total)return '<p class="muted small">No written notes from class yet.</p>';
@@ -2941,6 +2941,55 @@ function parentSkillsNarrative(cid,name){
  else s+=`We will keep nurturing each area gently, always celebrating ${f}'s progress. `;
  return s.trim();
 }
+/* Kinder & Kinder Plus skills readings — two tones from the same data (project assessments + class notes).
+   PARENT = gentle coordinator (no jargon, strengths-first, what helps at home).
+   COORDINATION = child-development specialist (specific focus areas to guide teachers). Read-only, varies per child. */
+function kinderSkillsAgg(cid,name){
+ const skl=STATE.skills[cid]||{};const agg={};
+ Object.keys(skl).forEach(function(k){if(k.indexOf('proj:')!==0)return;const r=skl[k][name];if(!r)return;Object.keys(r).forEach(function(d){const v=r[d];if(v&&v!=='Not assessed'){if(v==='Proficient'||agg[d]!=='Proficient')agg[d]=v;}});});
+ const strong=Object.keys(agg).filter(function(d){return agg[d]==='Proficient';});
+ const developing=Object.keys(agg).filter(function(d){return agg[d]==='Developing';});
+ return {agg:agg,strong:strong,developing:developing,assessed:Object.keys(agg).length};
+}
+function _kinderObs(cid,name){let o='';try{sessionsOf(cid).forEach(function(s){const r=(s.rows||{})[name];if(r&&r.obs)o+=' '+r.obs;});}catch(e){}return o.toLowerCase();}
+function parentKinderSkills(cid,name){
+ const f=parentFirst(cid,name);const seed=seedOf(cid,name);const a=kinderSkillsAgg(cid,name);const b=_kinderObs(cid,name);
+ if(!a.assessed&&!b.trim())return `${f}'s skills picture will appear here once the first assessments are recorded.`;
+ const PL={"Listening":"understanding English when we speak and play","Speaking":"speaking up in English","Project knowledge":"exploring and remembering our project themes","Literacy and numeracy":"early letters, sounds and numbers","Motor and focus":"focus and hands-on activities"};
+ let s=pickN([`${f} is developing beautifully in English, and there is plenty to celebrate.`,`We are seeing lovely growth in ${f}'s English.`,`${f} is growing in English in a happy, natural way.`,`It is a joy to watch ${f} blossom in English.`],seed)+' ';
+ if(a.strong.length){const list=andList(a.strong.map(function(d){return PL[d]||d;}));s+=pickN([`${f} is especially confident with ${list}.`,`A real strength for ${f} right now is ${list}.`,`${f} shines in ${list}.`],seed>>3)+' ';}
+ if(a.developing.length){const list=andList(a.developing.slice(0,2).map(function(d){return PL[d]||d;}));s+=pickN([`We are gently nurturing ${list} with playful, everyday practice, and ${f} keeps moving forward.`,`${list} ${a.developing.length>1?'are':'is'} blossoming, and with calm, fun practice ${f} grows a little more each week.`],seed>>5)+' ';}
+ if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(b))s+=`In class, ${f} takes part with real joy and curiosity. `;
+ else if(/help|kind|friend|share|caring|polite|social/.test(b))s+=`${f} is kind and collaborative, a lovely presence in the group. `;
+ s+=pickN([`At home, sharing English songs, stories and simple chats keeps this growth joyful.`,`Reading together and playing in English at home helps ${f} flourish even more.`,`A little English play at home, with songs and picture books, makes a wonderful difference.`],seed>>7);
+ return s.trim();
+}
+function coordKinderSkills(cid,name){
+ const f=parentFirst(cid,name);const seed=seedOf(cid,name);const a=kinderSkillsAgg(cid,name);const b=_kinderObs(cid,name);
+ if(!a.assessed&&!b.trim())return `No assessment data yet for ${f}. Once the project skills are rated, a development reading will appear here to guide planning.`;
+ const CF={"Listening":"more multi-step listening tasks and TPR to deepen comprehension","Speaking":"structured speaking turns with sentence frames and pair or group talk to grow spoken output","Project knowledge":"more hands-on exploration and recall questioning to consolidate the project concepts","Literacy and numeracy":"systematic letter and sound work plus early-number play embedded in routines","Motor and focus":"shorter, varied, multisensory tasks with movement breaks to extend attention and fine motor"};
+ let s=`Specialist reading of ${f}'s development: `;
+ if(a.strong.length)s+=`secure in ${andList(a.strong)}, so keep stretching with slightly more open-ended challenges. `;
+ if(a.developing.length){const d=a.developing.slice(0,2);s+=`Priority focus, `+d.map(function(x){return CF[x]||x;}).join('; ')+`. `;}
+ if(!a.strong.length&&!a.developing.length)s+=`Few skills rated so far; please complete the project assessment so we can target support precisely. `;
+ if(/distract|focus|atten|restless|disper/.test(b))s+=`Class notes suggest attention is still building, so keep tasks short, active and clearly signposted. `;
+ else if(/shy|quiet|reluctan|hesitat|confiden|insecure/.test(b))s+=`Notes suggest ${f} is still gaining speaking confidence, so favour low-pressure, well supported output. `;
+ s+=pickN([`Embed these goals in the current project with spaced, playful repetition so the language stays meaningful.`,`Build these into the daily routine and project work with gentle, repeated, low-pressure practice.`,`Weave these into songs, games and the project so progress feels natural for ${f}.`],seed>>3);
+ return s.trim();
+}
+/* Single source of truth for the report's Skills development block (parent vs coordination tone). */
+function reportSkillsHtml(cid,name,mode){
+ const c=getClass(cid);const set=SKILLSETS[c.level]||SKILLSETS.K1;
+ if(c.track==='nursery'){const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};const chips=set.map(function(s){const v=snap[s]||'Not yet';const e=v==='Confident'?'🌸':v==='Emerging'?'🌿':'🌱';return `<span class="chip">${e} ${esc(s)}</span>`;}).join(' ');return `<div style="margin-bottom:6px">${chips}</div><div class="narr">${esc(parentSkillsNarrative(cid,name))}</div>`;}
+ if(['Kinder','KinderPlus'].indexOf(c.level)>=0){
+   if(mode==='coord'){const a=kinderSkillsAgg(cid,name);const chips=Object.keys(a.agg).map(function(d){const v=a.agg[d];const e=v==='Proficient'?'🌸':'🌿';return `<span class="chip">${e} ${esc(d)}</span>`;}).join(' ');return `${chips?`<div style="margin-bottom:6px">${chips}</div>`:''}<div class="narr">${esc(coordKinderSkills(cid,name))}</div>`;}
+   return `<div class="narr">${esc(parentKinderSkills(cid,name))}</div>`;
+ }
+ const skl=STATE.skills[cid]||{};const skillSummary={};
+ Object.values(skl).forEach(function(per){const r=per[name];if(r)Object.entries(r).forEach(function(e){const s=e[0],v=e[1];if(v&&v!=='Not assessed'){if(v==='Proficient'||skillSummary[s]!=='Proficient')skillSummary[s]=v;}});});
+ const msg=mode==='coord'?'Skills will appear once the teacher completes an end-of-unit assessment.':'Skills will appear after the first assessment.';
+ return Object.keys(skillSummary).length?`<div class="tbl-wrap"><table><tr>${set.map(function(s){return `<th>${esc(s)}</th>`;}).join('')}</tr><tr>${set.map(function(s){const v=skillSummary[s]||'Not assessed';return `<td><span class="badge ${ratingClass(v)}">${esc(v)}</span></td>`;}).join('')}</tr></table></div>`:`<p class="muted small">${msg}</p>`;
+}
 function parentReportCard(cid,name){
  const c=getClass(cid);const L=LEVELS[c.level]||{};const st=studentStats(cid,name);const set=SKILLSETS[c.level]||SKILLSETS.K1;
  const skl=STATE.skills[cid]||{};const skillSummary={};
@@ -2961,7 +3010,7 @@ function parentReportCard(cid,name){
      <div class="stat blue"><div class="n">${st.attRate==null?'—':st.attRate+'%'}</div><div class="l">Attendance</div></div>
      <div class="stat"><div class="n">${st.seen}</div><div class="l">Classes recorded</div></div></div>
    <hr class="sep"><h3>🎯 Skills development</h3>
-   ${c.track==='nursery'?(()=>{const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};const chips=set.map(s=>{const v=snap[s]||'Not yet';const e=v==='Confident'?'🌸':v==='Emerging'?'🌿':'🌱';return `<span class="chip">${e} ${esc(s)}</span>`;}).join(' ');return `<div style="margin-bottom:6px">${chips}</div><div class="narr">${esc(parentSkillsNarrative(cid,name))}</div>`;})():(Object.keys(skillSummary).length?`<div class="tbl-wrap"><table><tr>${set.map(s=>`<th>${esc(s)}</th>`).join('')}</tr><tr>${set.map(s=>{const v=skillSummary[s]||'Not assessed';return `<td><span class="badge ${ratingClass(v)}">${esc(v)}</span></td>`;}).join('')}</tr></table></div>`:'<p class="muted small">Skills will appear after the first assessment.</p>')}
+   ${reportSkillsHtml(cid,name,'parent')}
    ${hasTests(c)?parentTestsSection(cid,name,tests):''}
    <hr class="sep"><h3>⭐ Highlights</h3>
    ${parentHighlights(cid,name)}
