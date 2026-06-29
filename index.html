@@ -2977,6 +2977,24 @@ function coordKinderSkills(cid,name){
  s+=pickN([`Embed these goals in the current project with spaced, playful repetition so the language stays meaningful.`,`Build these into the daily routine and project work with gentle, repeated, low-pressure practice.`,`Weave these into songs, games and the project so progress feels natural for ${f}.`],seed>>3);
  return s.trim();
 }
+/* Parent-facing Jolly Phonics overview: a warm, big-picture read of the child's reading journey this
+   semester (not sound-by-sound), in a coordinator's voice. Unique per child, never mentions any tool. */
+function parentPhonics(cid,name){
+ const f=parentFirst(cid,name);const seed=seedOf(cid,name);
+ const entries=studentRows(cid,name).filter(function(r){return (r.phon&&r.phon!=='— not marked')||(r.phsk&&Object.values(r.phsk).some(Boolean));});
+ if(!entries.length)return `${f} is just beginning the Jolly Phonics journey with us. As we explore the sounds together through songs, actions and play, this is where reading in English gently starts to grow.`;
+ const bySound={};entries.forEach(function(r){const lbl=(r.theme||'—').trim();const key=lbl.toLowerCase().replace(/[\/\s]/g,'')||'—';if(!bySound[key]||(r.date||'')>=(bySound[key].date||''))bySound[key]=Object.assign({},r,{lbl:lbl});});
+ const list=Object.values(bySound);const n=list.length;
+ let sec=0,bl=0,rec=0;list.forEach(function(e){const t=phonLevelMeta(e.phon).t;if(t==='Secure')sec++;else if(t==='Blending')bl++;else if(t==='Recognising')rec++;});
+ const reading=sec+bl;
+ let s=pickN([`Through Jolly Phonics, ${f} is building the foundations of reading in English in a joyful, playful way.`,`Jolly Phonics is one of the highlights of ${f}'s week, and it is where reading in English begins to bloom.`,`With Jolly Phonics, ${f} is discovering how the sounds of English come together into words.`,`Jolly Phonics is helping ${f} fall in love with the sounds that make up reading.`],seed)+' ';
+ if(sec>=Math.ceil(n*0.6))s+=pickN([`This semester, ${f} is already reading and writing many of the sounds with real confidence, a wonderful milestone for this age.`,`${f} now recognises, reads and even begins to write many sounds, which is a big and proud step.`],seed>>3)+' ';
+ else if(reading>=Math.ceil(n*0.5))s+=pickN([`The most exciting milestone has arrived: ${f} is beginning to blend sounds together to read little words, which is where reading truly takes off.`,`${f} has reached that special moment of putting sounds together to read simple words, the very heart of learning to read.`],seed>>3)+' ';
+ else if(rec>=Math.ceil(n*0.5))s+=pickN([`${f} is recognising more and more sounds and building a strong ear for English, exactly what comes before reading whole words.`,`${f} is learning to hear and recognise the sounds beautifully, laying the foundation that reading is built on.`],seed>>3)+' ';
+ else s+=pickN([`${f} is exploring the first sounds with curiosity, and at this age that playful discovery is exactly what matters most.`,`${f} is taking the first happy steps with the sounds, and every song and game is quietly building toward reading.`],seed>>3)+' ';
+ s+=pickN([`At home, singing the phonics songs and spotting familiar sounds in everyday words turns this learning into a game you can share.`,`You can support this beautifully at home by enjoying the sound songs together and noticing letters and sounds in books and signs.`,`A lovely way to help at home is to sing the sound songs and play a gentle game of finding sounds around the house.`],seed>>5);
+ return s.trim();
+}
 /* Single source of truth for the report's Skills development block (parent vs coordination tone). */
 function reportSkillsHtml(cid,name,mode){
  const c=getClass(cid);const set=SKILLSETS[c.level]||SKILLSETS.K1;
@@ -3011,6 +3029,7 @@ function parentReportCard(cid,name){
      <div class="stat"><div class="n">${st.seen}</div><div class="l">Classes recorded</div></div></div>
    <hr class="sep"><h3>🎯 Skills development</h3>
    ${reportSkillsHtml(cid,name,'parent')}
+   ${c.track==='phonics'?`<hr class="sep"><h3>🔡 Jolly Phonics</h3><div class="narr">${esc(parentPhonics(cid,name))}</div>`:''}
    ${hasTests(c)?parentTestsSection(cid,name,tests):''}
    <hr class="sep"><h3>⭐ Highlights</h3>
    ${parentHighlights(cid,name)}
