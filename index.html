@@ -449,7 +449,7 @@ const LS_KEY="kidsGarden.v4";
 const SB_URL="https://wsqsyrznjhmbseawikak.supabase.co";
 const SB_KEY="sb_publishable_2a1HvIR8onf0sBX58-hgDw_A044CqIJ";
 const ALLOWED_DOMAIN="kidsgardensjc.com.br";
-const ALLOWED_EMAILS=["mrcaue","coordenacao","fluentsteps","isabella","missmariaeduarda","missmariana","contato","mrvinicius","administracao","missanaluiza"].map(u=>u+"@"+ALLOWED_DOMAIN);
+const ALLOWED_EMAILS=["coordenacao","fluentsteps","isabella","missmariaeduarda","missmariana","contato","mrvinicius","administracao","missanaluiza"].map(u=>u+"@"+ALLOWED_DOMAIN);
 let sbClient=null;try{if(typeof window!=='undefined'&&window.supabase&&SB_URL.indexOf('http')===0)sbClient=window.supabase.createClient(SB_URL,SB_KEY);}catch(e){}
 let CURRENT_EMAIL=null,CLOUD_READY=false,_cloudTimer=null;
 
@@ -587,7 +587,7 @@ function changePwModal(){const ex=document.getElementById('cpwmodal');if(ex)ex.r
   <div style="margin-top:12px"><button class="btn" onclick="saveNewPw()">💾 Save</button> <button class="btn ghost" onclick="document.getElementById('cpwmodal').remove()">Cancel</button></div></div>`;
  document.body.appendChild(w);setTimeout(()=>{const e=$('#cpw_new');if(e)e.focus();},40);}
 async function saveNewPw(){const np=$('#cpw_new')?$('#cpw_new').value:'';if(!np||np.length<6){toast('⚠️ Password must be at least 6 characters');return;}if(!sbClient)return;const r=await sbClient.auth.updateUser({password:np});if(r.error){toast('Error changing password');return;}const m=document.getElementById('cpwmodal');if(m)m.remove();toast('✅ Password changed');}
-async function bootApp(){if(!sbClient){renderLogin('No connection to the server. Please reload the page (F5).');return;}try{const s=await sbClient.auth.getSession();const session=s.data&&s.data.session;if(!session){renderLogin('');return;}const email=((session.user&&session.user.email)||'').toLowerCase();if(!email.endsWith('@'+ALLOWED_DOMAIN)){await sbClient.auth.signOut();renderLogin('This account is not from the school domain.');return;}let kg={};try{kg=JSON.parse(localStorage.getItem('kg.auth')||'{}');}catch(e){}if(kg.keep){if(kg.until&&Date.now()>kg.until){await sbClient.auth.signOut();renderLogin('Your 24-hour session has expired. Please sign in again.');return;}}else{if(sessionStorage.getItem('kg.alive')!=='1'){await sbClient.auth.signOut();renderLogin('');return;}}CURRENT_EMAIL=email;finishBoot();}catch(e){renderLogin('');}}
+async function bootApp(){if(!sbClient){renderLogin('No connection to the server. Please reload the page (F5).');return;}try{const s=await sbClient.auth.getSession();const session=s.data&&s.data.session;if(!session){renderLogin('');return;}const email=((session.user&&session.user.email)||'').toLowerCase();if(!email.endsWith('@'+ALLOWED_DOMAIN)){await sbClient.auth.signOut();renderLogin('This account is not from the school domain.');return;}if(!ALLOWED_EMAILS.includes(email)){await sbClient.auth.signOut();renderLogin('Access removed. Please contact coordination.');return;}let kg={};try{kg=JSON.parse(localStorage.getItem('kg.auth')||'{}');}catch(e){}if(kg.keep){if(kg.until&&Date.now()>kg.until){await sbClient.auth.signOut();renderLogin('Your 24-hour session has expired. Please sign in again.');return;}}else{if(sessionStorage.getItem('kg.alive')!=='1'){await sbClient.auth.signOut();renderLogin('');return;}}CURRENT_EMAIL=email;finishBoot();}catch(e){renderLogin('');}}
 
 function getClass(id){return CLASSES.find(c=>c.id===id);}
 function applyClassMeta(){
