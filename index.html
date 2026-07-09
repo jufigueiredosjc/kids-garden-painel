@@ -693,7 +693,7 @@ function studentStats(id,name){
  dollars+=(STATE.dollarAdj&&STATE.dollarAdj[id+'::'+name])||0;
  return{p,a,l,hd,hm,dollars,seen,attRate:attDen?Math.round(p/attDen*100):null,hwRate:(hd+hm)?Math.round(hd/(hd+hm)*100):null};
 }
-function weakSkills(id,name){const sk=STATE.skills[id]||{};const dev=new Set();Object.values(sk).forEach(per=>{const r=per[name];if(r)Object.entries(r).forEach(([s,v])=>{if(v==="Developing")dev.add(s);});});return[...dev];}
+function weakSkills(id,name){const sk=STATE.skills[id]||{};const dev=new Set();Object.values(sk).forEach(per=>{const r=per[name];if(r)Object.entries(r).forEach(([s,v])=>{if(v==="Developing"||v==="Emerging")dev.add(s);});});return[...dev];}
 function strongSkills(id,name){const sk=STATE.skills[id]||{};const pr=new Set();Object.values(sk).forEach(per=>{const r=per[name];if(r)Object.entries(r).forEach(([s,v])=>{if(v==="Proficient"||v==="Confident")pr.add(s);});});return[...pr];}
 function lowTest(id,name){const c=getClass(id);const mx=testMaxFor(c);const thr=mx?mx*0.8:15;const t=STATE.tests[id]||{};let msg=null;Object.entries(t).forEach(([u,rows])=>rows.forEach(r=>{if(r.student===name&&r.score!=null&&r.score<thr)msg=mx?`Test ${u} below target (${r.score}/${mx})`:`Test ${u} below average (${r.score})`;}));return msg;}
 function attnReasons(id,name){const st=studentStats(id,name);const reasons=[];
@@ -2995,10 +2995,52 @@ function parentPhonics(cid,name){
  s+=pickN([`At home, singing the phonics songs and spotting familiar sounds in everyday words turns this learning into a game you can share.`,`You can support this beautifully at home by enjoying the sound songs together and noticing letters and sounds in books and signs.`,`A lovely way to help at home is to sing the sound songs and play a gentle game of finding sounds around the house.`],seed>>5);
  return s.trim();
 }
+/* Nursery developmental snapshot read per child (age 2-3): reads the child's own snapshot domains
+   (this age does not write yet; it develops through fine motor, listening, speaking, social play). */
+function nurserySnap(cid,name){
+ const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};
+ const domains=SKILLSETS.Nursery||[];
+ const confident=domains.filter(function(d){return snap[d]==='Confident';});
+ const emerging=domains.filter(function(d){return snap[d]==='Emerging';});
+ const notyet=domains.filter(function(d){return !snap[d]||snap[d]==='Not yet';});
+ return {snap:snap,domains:domains,confident:confident,emerging:emerging,notyet:notyet,assessed:confident.length+emerging.length};
+}
+/* 🧑‍🔬 Specialist analysis for nursery (COORDINATION, real): per child, age-aware, reads the snapshot + notes. */
+function nurserySpecialistBullets(cid,name){
+ const st=studentStats(cid,name);const a=nurserySnap(cid,name);
+ let obs='';try{sessionsOf(cid).forEach(function(s){const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}const b=obs.toLowerCase();const B=[];
+ if(st.seen===0){B.push('Not enough logged data yet; this profile fills in as the teacher records daily reports.');return B;}
+ if(st.attRate>=90)B.push(`<b>Attendance excellent</b> (${st.attRate}%), giving the consistent exposure this age needs most.`);
+ else if(st.attRate>=75)B.push(`<b>Attendance good</b> (${st.attRate}%), with ${st.a} absence${st.a===1?'':'s'} to monitor.`);
+ else if(st.attRate!=null)B.push(`<b>Attendance to watch</b> (${st.attRate}%, ${st.a} absences); continuity matters a lot at this age, consider a word with the family.`);
+ if(a.confident.length)B.push(`<b>Confident in:</b> ${a.confident.map(esc).join(', ')}.`);
+ if(a.emerging.length)B.push(`<b>Emerging, ready to consolidate:</b> ${a.emerging.map(esc).join(', ')}.`);
+ if(a.assessed&&a.notyet.length)B.push(`<b>Priority to establish:</b> ${a.notyet.slice(0,3).map(esc).join(', ')}, through playful, multisensory routines.`);
+ if(!a.assessed)B.push('Developmental snapshot still pending; completing it will let us target support precisely.');
+ if(/motor|hand|grip|scissor|pencil|trace|craft|glue|draw|cut|thread|playdough/.test(b))B.push(`<b>Fine motor:</b> notes show hands-on coordination work; keep threading, playdough and tracing, as this age develops through the hands, not writing yet.`);
+ if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(b))B.push(`<b>Engagement:</b> takes part actively and with real enjoyment.`);
+ else if(/shy|quiet|reluctan|cries|clingy|timid/.test(b))B.push(`<b>Settling:</b> still building comfort and confidence; warm, predictable routines will help.`);
+ return B.slice(0,6);
+}
+/* 🎯 Skills development for nursery (COORDINATION, real & specific with pedagogical steer). */
+function coordNurserySkills(cid,name){
+ const f=parentFirst(cid,name);const seed=seedOf(cid,name);const a=nurserySnap(cid,name);
+ let obs='';try{sessionsOf(cid).forEach(function(s){const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}const b=obs.toLowerCase();
+ if(!a.assessed&&!obs.trim())return `No developmental snapshot recorded yet for ${f}. Completing it will let us target support precisely.`;
+ let s='Developmental read: ';
+ if(a.confident.length)s+=`${f} is secure in ${andList(a.confident)}. `;
+ if(a.emerging.length)s+=`Emerging and ready to consolidate: ${andList(a.emerging)}. `;
+ if(a.assessed&&a.notyet.length)s+=`Still to establish: ${andList(a.notyet.slice(0,2))}. `;
+ if(a.emerging.indexOf('Fine & Gross Motor')>=0||a.notyet.indexOf('Fine & Gross Motor')>=0||/motor|hand|scissor|trace|craft|glue|thread|playdough/.test(b))s+=`For motor skills, keep building coordination through threading, playdough, tracing and tearing, remembering writing is not expected yet at this age. `;
+ if(a.emerging.indexOf('Emerging Speaking')>=0||a.notyet.indexOf('Emerging Speaking')>=0||/shy|quiet|reluctan/.test(b))s+=`For speaking, favour songs, chants and repeat-after-me in low-pressure moments so spoken output grows naturally. `;
+ if(a.notyet.indexOf('Focus & Engagement')>=0||/distract|focus|atten|restless/.test(b))s+=`Attention is still developing, so keep tasks short, active and multisensory with movement breaks. `;
+ s+=pickN([`Embed these targets in songs, routines and hands-on play with short, spaced repetition.`,`Weave these into daily routines and sensory play so growth feels natural for ${f}.`,`Build these into the project and everyday play with gentle, repeated exposure.`],seed>>3);
+ return s.trim();
+}
 /* Single source of truth for the report's Skills development block (parent vs coordination tone). */
 function reportSkillsHtml(cid,name,mode){
  const c=getClass(cid);const set=SKILLSETS[c.level]||SKILLSETS.K1;
- if(c.track==='nursery'){const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};const chips=set.map(function(s){const v=snap[s]||'Not yet';const e=v==='Confident'?'🌸':v==='Emerging'?'🌿':'🌱';return `<span class="chip">${e} ${esc(s)}</span>`;}).join(' ');return `<div style="margin-bottom:6px">${chips}</div><div class="narr">${esc(parentSkillsNarrative(cid,name))}</div>`;}
+ if(c.track==='nursery'){const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};const chips=set.map(function(s){const v=snap[s]||'Not yet';const e=v==='Confident'?'🌸':v==='Emerging'?'🌿':'🌱';return `<span class="chip">${e} ${esc(s)}</span>`;}).join(' ');const narr=mode==='coord'?coordNurserySkills(cid,name):parentSkillsNarrative(cid,name);return `<div style="margin-bottom:6px">${chips}</div><div class="narr">${esc(narr)}</div>`;}
  if(['Kinder','KinderPlus'].indexOf(c.level)>=0){
    if(mode==='coord'){const a=kinderSkillsAgg(cid,name);const chips=Object.keys(a.agg).map(function(d){const v=a.agg[d];const e=v==='Proficient'?'🌸':'🌿';return `<span class="chip">${e} ${esc(d)}</span>`;}).join(' ');return `${chips?`<div style="margin-bottom:6px">${chips}</div>`:''}<div class="narr">${esc(coordKinderSkills(cid,name))}</div>`;}
    return `<div class="narr">${esc(parentKinderSkills(cid,name))}</div>`;
@@ -3069,6 +3111,7 @@ function fluentSpeakingBullets(cid,name){
 function narrativeBullets(cid,name){
  const c=getClass(cid);
  if(c.fluent)return fluentSpeakingBullets(cid,name);
+ if(c.track==='nursery')return nurserySpecialistBullets(cid,name);
  const st=studentStats(cid,name);const dev=weakSkills(cid,name),prof=strongSkills(cid,name);
  const tests=[];const t=STATE.tests[cid]||{};Object.entries(t).forEach(([u,rows])=>{const r=rows.find(x=>x.student===name);if(r&&r.score!=null)tests.push({u:Number(u),score:r.score});});tests.sort((a,b)=>a.u-b.u);
  const B=[];
