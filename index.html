@@ -2805,29 +2805,29 @@ function parentFirst(cid,name){return (displayName(cid,name)||name).split(' ')[0
 /* Distinctive positive traits observed for THIS child, read ONLY from positive-toned written observations,
    so each child's report reflects their own real classroom self (this is what makes reports differ per child). */
 const CHILD_TRAITS=[
- ["curious","curious|curiosity|explor|wonder|asked question|interested|discover|keen to know","a lovely curiosity, always keen to explore and find out"],
- ["creative","creativ|imagin|invent|design|drew|drawing|painting|craft|built|make believe","real creativity and imagination"],
- ["expressive","spoke|speaking|said|express|new word|vocab|sentence|told us|answered|repeated","a growing voice in English, trying new words and ideas"],
- ["social","friend|shared|sharing|kind|helped a friend|caring|polite|cooperat|gentle with","a warm, caring way with the other children"],
- ["focused","focused|concentrat|attentive|completed|finished the|persever|patient|stayed on task","lovely focus, seeing a task through to the end"],
+ ["curious","curious|curiosity|explor|wonder|asked question|interested|discover|keen to know","curiosity, often asking questions and exploring"],
+ ["creative","creativ|imagin|invent|design|drew|drawing|painting|craft|built|make believe","creativity and imagination in activities"],
+ ["expressive","spoke|speaking|said|express|new word|vocab|sentence|told us|answered|repeated","a growing voice in English, using new words and ideas"],
+ ["social","friend|shared|sharing|kind|helped a friend|caring|polite|cooperat|gentle with","a caring, cooperative way with the other children"],
+ ["focused","focused|concentrat|attentive|completed|finished the|persever|patient|stayed on task","focus, seeing a task through to the end"],
  ["confident","confiden|brave|volunteered|proud|independ|had a go|tried on|by themselves","growing confidence to take part and try new things"],
- ["musical","song|sang|singing|music|dance|dancing|rhythm|chant","a real love of songs, music and movement"],
- ["enthusiastic","enthusias|excited|loved|enjoyed|joyful|eager|delight|beaming|big smile","genuine joy and enthusiasm in class"],
- ["motor","careful|neat|colour|colouring|traced|threading|cutting|coordination|hands-on","careful, growing coordination in hands-on activities"],
- ["helpful","tidied|helped tidy|responsible|helpful|looked after|little leader","a helpful, responsible spirit"]
+ ["musical","song|sang|singing|music|dance|dancing|rhythm|chant","a strong response to songs, music and movement"],
+ ["enthusiastic","enthusias|excited|loved|enjoyed|joyful|eager|delight|beaming|big smile","enthusiasm and engagement in class"],
+ ["motor","careful|neat|colour|colouring|traced|threading|cutting|coordination|hands-on","growing coordination in hands-on activities"],
+ ["helpful","tidied|helped tidy|responsible|helpful|looked after|little leader","a helpful, responsible attitude"]
 ];
 function childPositiveTraits(cid,name){let obs='';try{sessionsOf(cid).forEach(function(s){const r=(s.rows||{})[name];if(r&&r.obs&&POS_RE.test(r.obs)&&!NEG_RE.test(r.obs))obs+=' '+r.obs;});}catch(e){}const b=obs.toLowerCase();const hits=[];CHILD_TRAITS.forEach(function(t){const m=b.match(new RegExp(t[1],'g'));if(m)hits.push({key:t[0],phrase:t[2],n:m.length});});hits.sort(function(a,b){return b.n-a.n;});return hits;}
 function parentOverall(cid,name){const f=parentFirst(cid,name);const seed=seedOf(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const tr=childPositiveTraits(cid,name);
- let s=pickN([`${f} is developing beautifully and meeting English in a natural, joyful way`,`${f} is growing in English happily and at a lovely pace`,`${f} is settling into English with real ease and enjoyment`,`${f} brings a happy, curious energy to class and is blooming in English`],seed);
+ let s=pickN([`${f} is developing well and taking to English naturally`,`${f} is making steady progress in English`,`${f} is settling into English and gaining confidence`,`${f} brings a curious energy to class and is progressing in English`],seed);
  if(tr.length)s+=`, and we especially notice ${tr[0].phrase}`;
- else if(prof.length)s+=`, showing real confidence in ${andList(prof.slice(0,2))}`;
+ else if(prof.length)s+=`, with confidence in ${andList(prof.slice(0,2))}`;
  s+='. ';
- if(tr.length>1)s+=pickN([`${f} also brings ${tr[1].phrase}. `,`Alongside that, there is ${tr[1].phrase}. `],seed>>3);
- if(prof.length)s+=pickN([`${f} is confident with ${andList(prof.slice(0,2))}. `,`Real strengths right now include ${andList(prof.slice(0,2))}. `],seed>>5);
- if(dev.length)s+=pickN([`With gentle, playful practice in ${andList(dev.slice(0,2))}, ${f} will keep growing steadily, just as we expect at this stage.`,`A little more happy practice with ${andList(dev.slice(0,2))} will help ${f} keep blooming, right on track for this age.`],seed>>7);
+ if(tr.length>1)s+=pickN([`${f} also shows ${tr[1].phrase}. `,`Alongside that, there is ${tr[1].phrase}. `],seed>>3);
+ if(prof.length)s+=pickN([`${f} is confident with ${andList(prof.slice(0,2))}. `,`Strengths right now include ${andList(prof.slice(0,2))}. `],seed>>5);
+ if(dev.length)s+=pickN([`With continued practice in ${andList(dev.slice(0,2))}, ${f} will keep progressing, as expected at this stage.`,`A little more practice with ${andList(dev.slice(0,2))} will help ${f} keep progressing, on track for this age.`],seed>>7);
  return esc(s.trim());}
 function parentOverviewBullets(cid,name){const st=studentStats(cid,name);const prof=strongSkills(cid,name);const B=[];
- if(st.attRate!=null)B.push(`<b>Attendance:</b> ${st.attRate}%. ${st.attRate>=90?'A wonderful, consistent presence in class.':st.attRate>=75?'A good presence in class.':'Every class is a precious chance to keep growing.'}`);
+ if(st.attRate!=null)B.push(`<b>Attendance:</b> ${st.attRate}%. ${st.attRate>=90?'A consistent presence in class.':st.attRate>=75?'A good presence in class.':'More regular attendance would support steady progress.'}`);
  if(prof.length)B.push(`<b>Confident in:</b> ${prof.map(esc).join(', ')}.`);
  B.push(`<b>Overall:</b> ${parentOverall(cid,name)}`);
  return B;}
@@ -2913,17 +2913,17 @@ function parentDevAttendance(cid,name,seed){const st=studentStats(cid,name);cons
 function parentDevNoteAuto(cid,name){
  const c=getClass(cid);const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const st=studentStats(cid,name);
  const young=["Nursery","Kinder","KinderPlus","K1"].includes(c.level);const seed=seedOf(cid,name);
- let s=pickN([`At Kids Garden, ${f} learns English the way the brain learns best, through meaningful and playful experiences rather than memorisation. `,`Here at Kids Garden, English reaches ${f} through play, stories and real meaning, which is exactly how a child's brain takes in a language. `,`${f} is growing in English in the most natural way, living the language through games, songs and projects rather than memorising it. `,`Week by week, ${f} meets English as something to enjoy and explore, and that is just how the brain makes a new language its own. `],seed);
- if(prof.length){const list=andList(prof);s+=pickN([`The confident growth in ${list} shows the language is becoming natural and automatic for ${f}. `,`${f} is already at real ease with ${list}, a sign that English is settling in deeply. `,`We especially notice ${f} flourishing in ${list}, which is a joy to watch unfold. `,`${list} ${prof.length>1?'are':'is'} becoming a genuine strength for ${f}. `],seed>>3);}
+ let s=pickN([`At Kids Garden, ${f} learns English the way the brain learns best, through meaningful, hands-on experiences rather than memorisation. `,`Here at Kids Garden, English reaches ${f} through play, stories and real meaning, which is how a child's brain takes in a language. `,`${f} is learning English in a natural way, through games, songs and projects rather than memorising it. `,`Week by week, ${f} meets English as something to use and explore, and that is how the brain makes a new language its own. `],seed);
+ if(prof.length){const list=andList(prof);s+=pickN([`The steady growth in ${list} shows the language is becoming more automatic for ${f}. `,`${f} is already at ease with ${list}, a sign that English is settling in. `,`We especially notice ${f} progressing in ${list}. `,`${list} ${prof.length>1?'are':'is'} becoming a clear strength for ${f}. `],seed>>3);}
  const pos=parentDevPositive(cid,name,seed>>5);if(pos)s+=pos+' ';
  if(st.seen>=4){const fa=pickN([`Across the ${st.seen} classes recorded so far, ${f} has been building a steady, personal relationship with English. `,`Over this term's ${st.seen} logged classes, ${f}'s path with English is taking on its own rhythm and character. `,``,``],seed>>7);if(fa)s+=fa;}
- s+=pickN(young?[`At this age the brain is wonderfully open to sounds and patterns, so every song, game and gesture helps English settle deeply and joyfully. `,`Little minds soak up language through repetition and play, and ${f} is right in that golden window where English takes root almost effortlessly. `]:[`As the brain consolidates language through varied, spaced practice, ${f}'s skills are gradually moving from effort into ease. `,`With each layered, meaningful repetition, English is becoming more automatic for ${f}, shifting from thinking about it to simply using it. `],seed>>9);
+ s+=pickN(young?[`At this age the brain is very open to sounds and patterns, so songs, games and gestures help English settle in naturally. `,`Young children take in language through repetition and play, and ${f} is at a stage where English takes root readily. `]:[`As the brain consolidates language through varied, spaced practice, ${f}'s skills are gradually moving from effort into ease. `,`With each meaningful repetition, English is becoming more automatic for ${f}, moving from thinking about it to simply using it. `],seed>>9);
  const att=parentDevAttendance(cid,name,seed>>11);
  const themes=parentDevThemes(cid,name,seed).slice(0,att?1:2);
  if(themes.length){themes.forEach(t=>{s+=t+' ';});}
- else if(dev.length){const list=andList(dev.slice(0,2));s+=pickN([`A gentle, encouraging focus on ${list}, always with warmth and never pressure, will keep this growth steady, because a calm and confident mind is what truly unlocks learning. `,`A little extra, playful attention to ${list}, offered with patience and never pressure, will help ${f} keep moving forward with confidence. `],seed>>15);}
+ else if(dev.length){const list=andList(dev.slice(0,2));s+=pickN([`A continued focus on ${list}, at ${f}'s own pace, will help keep this progress steady, as a calm and confident child learns best. `,`A little more attention to ${list}, without pressure, will help ${f} keep moving forward. `],seed>>15);}
  if(att)s+=att+' ';
- s+=pickN([`Overall, ${f} is developing beautifully, and we feel privileged to walk this path alongside your family. `,`All in all, ${f} is flourishing, and it is a joy to share this journey with you. `,`In short, ${f} keeps growing with confidence, and we are grateful to be part of it with your family. `,`Above all, ${f} is growing in a happy, healthy way, and we treasure being part of this journey. `],seed>>13);
+ s+=pickN([`Overall, ${f} is developing well, and we are glad to work alongside your family. `,`In all, ${f} is progressing steadily, and it is good to share this with you. `,`In short, ${f} keeps growing with confidence, and we are glad to be part of it with your family. `,`Above all, ${f} is growing in a healthy, steady way, and we value being part of it. `],seed>>13);
  return s.trim();
 }
 function parentDevNoteKey(cid,name){return cid+'::'+name;}
@@ -2949,14 +2949,14 @@ function parentSkillsNarrative(cid,name){
  let obs='';try{sessionsOf(cid).forEach(function(s){const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}
  const b=obs.toLowerCase();
  if(!assessed.length&&!obs.trim())return `${f}'s development snapshot will appear here once the first observations are recorded.`;
- let s=pickN([`In ${f}'s development snapshot, we already see lovely growth.`,`Looking at how ${f} is developing, there is a lot to celebrate.`,`${f} is blossoming, and the snapshot shows it beautifully.`,`${f}'s little steps are adding up to real, joyful growth.`],seed)+' ';
- if(confident.length){const list=andList(confident);s+=pickN([`${f} shows real confidence in ${list}, doing it happily and often.`,`We see ${f} especially secure in ${list}, a genuine strength.`,`${list} ${confident.length>1?'are':'is'} already a strong point for ${f}.`],seed>>3)+' ';}
- if(emerging.length){const list=andList(emerging);s+=pickN([`${list} ${emerging.length>1?'are':'is'} blossoming nicely, and with gentle, playful practice ${f} keeps growing.`,`${f} is showing ${list} more and more, which is wonderful to watch unfold.`],seed>>5)+' ';}
- if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(b))s+=pickN([`In class, ${f} takes part with real joy and curiosity.`,`${f} joins the activities with a happy, willing spirit.`],seed>>7)+' ';
- else if(/help|kind|friend|share|caring|polite|social/.test(b))s+=`${f} is caring and warm with friends, a lovely presence in the group. `;
- else if(/song|music|dance|sing|move|motor|craft|paint/.test(b))s+=`${f} lights up with songs, movement and hands-on play, which is exactly how skills grow at this age. `;
- if(!confident.length&&!emerging.length)s+=`Every child grows at their own pace, and ${f} is settling in beautifully, gaining new skills little by little. `;
- else s+=`We will keep nurturing each area gently, always celebrating ${f}'s progress. `;
+ let s=pickN([`${f}'s development snapshot shows steady growth.`,`Looking at how ${f} is developing, there is clear progress.`,`The snapshot shows ${f} developing across the areas we observe.`,`${f}'s steps are adding up to real progress.`],seed)+' ';
+ if(confident.length){const list=andList(confident);s+=pickN([`${f} is confident in ${list}, doing it regularly.`,`${f} is secure in ${list}, a clear strength.`,`${list} ${confident.length>1?'are':'is'} already a strong point for ${f}.`],seed>>3)+' ';}
+ if(emerging.length){const list=andList(emerging);s+=pickN([`${list} ${emerging.length>1?'are':'is'} developing, and with regular practice ${f} continues to progress.`,`${f} is showing ${list} more and more.`],seed>>5)+' ';}
+ if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(b))s+=pickN([`In class, ${f} takes part and shows curiosity.`,`${f} joins the activities willingly.`],seed>>7)+' ';
+ else if(/help|kind|friend|share|caring|polite|social/.test(b))s+=`${f} is caring and cooperative with friends in the group. `;
+ else if(/song|music|dance|sing|move|motor|craft|paint/.test(b))s+=`${f} responds well to songs, movement and hands-on play, which is how skills grow at this age. `;
+ if(!confident.length&&!emerging.length)s+=`Each child grows at their own pace, and ${f} is settling in and gaining new skills step by step. `;
+ else s+=`We will keep working on each area and following ${f}'s progress. `;
  return s.trim();
 }
 /* Kinder & Kinder Plus skills readings — two tones from the same data (project assessments + class notes).
@@ -2974,11 +2974,11 @@ function parentKinderSkills(cid,name){
  const f=parentFirst(cid,name);const seed=seedOf(cid,name);const a=kinderSkillsAgg(cid,name);const b=_kinderObs(cid,name);
  if(!a.assessed&&!b.trim())return `${f}'s skills picture will appear here once the first assessments are recorded.`;
  const PL={"Listening":"understanding English when we speak and play","Speaking":"speaking up in English","Project knowledge":"exploring and remembering our project themes","Literacy and numeracy":"early letters, sounds and numbers","Motor and focus":"focus and hands-on activities"};
- let s=pickN([`${f} is developing beautifully in English, and there is plenty to celebrate.`,`We are seeing lovely growth in ${f}'s English.`,`${f} is growing in English in a happy, natural way.`,`It is a joy to watch ${f} blossom in English.`],seed)+' ';
- if(a.strong.length){const list=andList(a.strong.map(function(d){return PL[d]||d;}));s+=pickN([`${f} is especially confident with ${list}.`,`A real strength for ${f} right now is ${list}.`,`${f} shines in ${list}.`],seed>>3)+' ';}
- if(a.developing.length){const list=andList(a.developing.slice(0,2).map(function(d){return PL[d]||d;}));s+=pickN([`We are gently nurturing ${list} with playful, everyday practice, and ${f} keeps moving forward.`,`${list} ${a.developing.length>1?'are':'is'} blossoming, and with calm, fun practice ${f} grows a little more each week.`],seed>>5)+' ';}
- const tr=childPositiveTraits(cid,name);if(tr.length){const t=tr[(seed>>>9)%tr.length];s+=`In class, we love that ${f} shows ${t.phrase}. `;}
- s+=pickN([`At home, sharing English songs, stories and simple chats keeps this growth joyful.`,`Reading together and playing in English at home helps ${f} flourish even more.`,`A little English play at home, with songs and picture books, makes a wonderful difference.`],seed>>7);
+ let s=pickN([`${f} is developing well in English, with clear progress.`,`We are seeing steady growth in ${f}'s English.`,`${f} is growing in English in a natural way.`,`${f} is making good progress in English.`],seed)+' ';
+ if(a.strong.length){const list=andList(a.strong.map(function(d){return PL[d]||d;}));s+=pickN([`${f} is especially confident with ${list}.`,`A clear strength for ${f} right now is ${list}.`,`${f} does well with ${list}.`],seed>>3)+' ';}
+ if(a.developing.length){const list=andList(a.developing.slice(0,2).map(function(d){return PL[d]||d;}));s+=pickN([`We are working on ${list} through everyday practice, and ${f} keeps moving forward.`,`${list} ${a.developing.length>1?'are':'is'} developing, and with regular practice ${f} progresses a little more each week.`],seed>>5)+' ';}
+ const tr=childPositiveTraits(cid,name);if(tr.length){const t=tr[(seed>>>9)%tr.length];s+=`In class, ${f} shows ${t.phrase}. `;}
+ s+=pickN([`At home, sharing English songs, stories and simple chats supports this progress.`,`Reading together and using a little English at home helps ${f} keep developing.`,`A little English at home, with songs and picture books, makes a real difference.`],seed>>7);
  return s.trim();
 }
 function coordKinderSkills(cid,name){
@@ -2999,18 +2999,18 @@ function coordKinderSkills(cid,name){
 function parentPhonics(cid,name){
  const f=parentFirst(cid,name);const seed=seedOf(cid,name);
  const entries=studentRows(cid,name).filter(function(r){return (r.phon&&r.phon!=='— not marked')||(r.phsk&&Object.values(r.phsk).some(Boolean));});
- if(!entries.length)return `${f} is just beginning the Jolly Phonics journey with us. As we explore the sounds together through songs, actions and play, this is where reading in English gently starts to grow.`;
+ if(!entries.length)return `${f} is just beginning Jolly Phonics with us. As we work through the sounds together with songs, actions and play, this is where reading in English starts.`;
  const bySound={};entries.forEach(function(r){const lbl=(r.theme||'—').trim();const key=lbl.toLowerCase().replace(/[\/\s]/g,'')||'—';if(!bySound[key]||(r.date||'')>=(bySound[key].date||''))bySound[key]=Object.assign({},r,{lbl:lbl});});
  const list=Object.values(bySound);const n=list.length;
  let sec=0,bl=0,rec=0;list.forEach(function(e){const t=phonLevelMeta(e.phon).t;if(t==='Secure')sec++;else if(t==='Blending')bl++;else if(t==='Recognising')rec++;});
  const reading=sec+bl;
- let s=pickN([`Through Jolly Phonics, ${f} is building the foundations of reading in English in a joyful, playful way.`,`Jolly Phonics is one of the highlights of ${f}'s week, and it is where reading in English begins to bloom.`,`With Jolly Phonics, ${f} is discovering how the sounds of English come together into words.`,`Jolly Phonics is helping ${f} fall in love with the sounds that make up reading.`],seed)+' ';
- if(sec>=Math.ceil(n*0.6))s+=pickN([`This semester, ${f} is already reading and writing many of the sounds with real confidence, a wonderful milestone for this age.`,`${f} now recognises, reads and even begins to write many sounds, which is a big and proud step.`],seed>>3)+' ';
- else if(reading>=Math.ceil(n*0.5))s+=pickN([`The most exciting milestone has arrived: ${f} is beginning to blend sounds together to read little words, which is where reading truly takes off.`,`${f} has reached that special moment of putting sounds together to read simple words, the very heart of learning to read.`],seed>>3)+' ';
- else if(rec>=Math.ceil(n*0.5))s+=pickN([`${f} is recognising more and more sounds and building a strong ear for English, exactly what comes before reading whole words.`,`${f} is learning to hear and recognise the sounds beautifully, laying the foundation that reading is built on.`],seed>>3)+' ';
- else s+=pickN([`${f} is exploring the first sounds with curiosity, and at this age that playful discovery is exactly what matters most.`,`${f} is taking the first happy steps with the sounds, and every song and game is quietly building toward reading.`],seed>>3)+' ';
+ let s=pickN([`Through Jolly Phonics, ${f} is building the foundations of reading in English, step by step.`,`Jolly Phonics is a regular part of ${f}'s week, and it is where reading in English begins.`,`With Jolly Phonics, ${f} is learning how the sounds of English come together into words.`,`Jolly Phonics is helping ${f} connect sounds to letters and to reading.`],seed)+' ';
+ if(sec>=Math.ceil(n*0.6))s+=pickN([`This semester, ${f} is already reading and writing many of the sounds with confidence, an important milestone for this age.`,`${f} now recognises, reads and is beginning to write many sounds, which is a significant step.`],seed>>3)+' ';
+ else if(reading>=Math.ceil(n*0.5))s+=pickN([`${f} has reached an important milestone: beginning to blend sounds together to read short words, which is where reading starts to develop.`,`${f} is starting to put sounds together to read simple words, a key part of learning to read.`],seed>>3)+' ';
+ else if(rec>=Math.ceil(n*0.5))s+=pickN([`${f} is recognising more and more sounds and building the ear for English that comes before reading whole words.`,`${f} is learning to hear and recognise the sounds, which is the foundation reading is built on.`],seed>>3)+' ';
+ else s+=pickN([`${f} is working on the first sounds, and at this age that early, hands-on exposure is what matters most.`,`${f} is taking the first steps with the sounds, and each song and game builds toward reading.`],seed>>3)+' ';
  const tr=childPositiveTraits(cid,name);if(tr.length){const t=tr[(seed>>>11)%tr.length];s+=`${f} brings ${t.phrase} to this part of the day. `;}
- s+=pickN([`At home, singing the phonics songs and spotting familiar sounds in everyday words turns this learning into a game you can share.`,`You can support this beautifully at home by enjoying the sound songs together and noticing letters and sounds in books and signs.`,`A lovely way to help at home is to sing the sound songs and play a gentle game of finding sounds around the house.`],seed>>5);
+ s+=pickN([`At home, singing the phonics songs and pointing out familiar sounds in everyday words turns this into a game you can share.`,`You can support this at home by singing the sound songs together and noticing letters and sounds in books and signs.`,`A simple way to help at home is to sing the sound songs and look for sounds in words around the house.`],seed>>5);
  return s.trim();
 }
 /* Nursery developmental snapshot read per child (age 2-3): reads the child's own snapshot domains
