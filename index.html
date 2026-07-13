@@ -628,7 +628,30 @@ function trackItems(c){
 function trackName(c){return c.track==="phonics"?"Phonics group":c.track==="nursery"?"Theme":c.track==="lessons"?"Lesson":"Unit";}
 function testName(c){return c.mock?"Mock Test":"Unit Test";}
 /* These classes score unit tests out of 10; target met = 80% (>=8). Only these levels. */
-function testMaxFor(c){return (c&&(c.level==='K1'||c.level==='K6'||c.level==='TeensB1'))?10:null;}
+function testMaxFor(c){return (c&&(c.level==='K1'||c.level==='K6'||c.level==='TeensB1'))?10:(c&&(c.level==='K2'||c.level==='K3'||c.level==='K4'||c.level==='K5'))?30:null;}
+/* Test result tier, proportional to this class's maximum (10 for K1/K6/TeensB1, 30 for K2-K5). 2=solid, 1=developing, 0=below. */
+function testTier(score,c){const m=testMaxFor(c)||30;const r=Number(score)/m;return r>=0.73?2:(r>=0.5?1:0);}
+function testTheme(fb){fb=String(fb||'').toLowerCase();
+ if(/vocab|word|crayon|name of|noun/.test(fb))return 'vocabulary';
+ if(/listen/.test(fb))return 'listening';
+ if(/read/.test(fb))return 'reading';
+ if(/writ|letter|mirror|spell|trace/.test(fb))return 'writing';
+ if(/understand|instruct|confus|didn'?t get|did not get/.test(fb))return 'comprehension of instructions';
+ if(/grammar|structure|sentence|tense/.test(fb))return 'sentence structure';
+ if(/speak|pronun|oral/.test(fb))return 'speaking';
+ if(/number|count|math/.test(fb))return 'numeracy';
+ return '';}
+/* Coordination-facing (teaching lens): what to reinforce and where to aim the teaching. Never shown to parents. */
+function coordTestFocus(t,c){if(t.score==null)return 'Not sat yet — schedule when possible.';
+ const tier=testTier(t.score,c);const th=testTheme(t.feedback);
+ if(tier===2)return th?`Strong result. Extend ${th} with higher-order, open-ended tasks.`:'Strong result. Extend with challenge tasks.';
+ if(tier===1)return th?`Reinforce ${th} with short, multisensory review; recheck before written work.`:'Consolidate this unit with spaced, multisensory review.';
+ return th?`Gap in ${th}: reteach explicitly, check comprehension first, and monitor closely.`:'Below range: reteach the core content and monitor closely.';}
+/* Fluent Steps recency for a child: last date present, last club date, and weeks since last attended. Read-only. */
+function fluentRecency(cid,name){const full=((displayName(cid,name)||name)+'').trim().toLowerCase();let lastPresent='',lastClass='';
+ try{sessionsOf('fluent_steps').forEach(s=>{const d=s.date||'';if(d>lastClass)lastClass=d;const rows=s.rows||{};Object.keys(rows).forEach(rn=>{if(((displayName('fluent_steps',rn)||rn)+'').trim().toLowerCase()===full&&(rows[rn].att==='Present'||rows[rn].att==='Late')&&d>lastPresent)lastPresent=d;});});}catch(e){}
+ let weeks=null;if(lastPresent){const d2=new Date(lastPresent+'T00:00:00');if(!isNaN(d2))weeks=Math.floor((new Date()-d2)/(7*864e5));}
+ return {lastPresent:lastPresent,lastClass:lastClass,weeks:weeks};}
 function testTargetFor(c){var mx=testMaxFor(c);return mx?Math.round(mx*0.8):null;}
 
 /* helpers */
@@ -2669,7 +2692,7 @@ function generateNarrative(cid,name,audience){
  else p.push(`Specialist pedagogical analysis prepared for Ms. Lidiane (Pedagogical Coordination). Student: <b>${esc(name)}</b> — ${esc(c.name)} (${age}), teacher ${esc(c.teacher)}.`);
  if(st.seen===0){
    if(tests.length){const last=tests[tests.length-1];
-     p.push(`Daily-report data is not yet logged for ${esc(name)}, so this is a preliminary analysis based on assessment data. Most recent ${testName(c).toLowerCase()} (${trackName(c)} ${last.u}): ${last.score}. ${last.score>=22?'A solid result that suggests the core competencies for this level are taking hold.':last.score>=15?'A developing result with clear room to grow.':'Below the expected range — extra support is advised.'} ${neuroRec(c.level,dev)} Once ${esc(c.teacher)} begins logging daily reports, attendance, homework and skills will complete this profile.`);}
+     p.push(`Daily-report data is not yet logged for ${esc(name)}, so this is a preliminary analysis based on assessment data. Most recent ${testName(c).toLowerCase()} (${trackName(c)} ${last.u}): ${last.score}. ${(t=>t===2?'A solid result that suggests the core competencies for this level are taking hold.':t===1?'A developing result with clear room to grow.':'Below the expected range, extra support is advised.')(testTier(last.score,c))} ${neuroRec(c.level,dev)} Once ${esc(c.teacher)} begins logging daily reports, attendance, homework and skills will complete this profile.`);}
    else p.push(`There is not enough logged data yet to assess ${esc(name)}. As ${esc(c.teacher)} records daily reports and end-of-${trackName(c).toLowerCase()} assessments, this analysis will update automatically.`);
  }
  else{
@@ -2680,7 +2703,7 @@ function generateNarrative(cid,name,audience){
   if(prof.length)p.push(`${esc(name)} shows confidence in ${prof.map(esc).join(', ')}.`);
   if(dev.length)p.push(`Priority development areas are ${dev.map(esc).join(', ')}; targeted multisensory practice (movement, songs and visuals) will strengthen these.`);
   if(!prof.length&&!dev.length)p.push(`End-of-${trackName(c).toLowerCase()} skill assessments are still pending; once completed they will sharpen this profile.`);
-  if(tests.length){const last=tests[tests.length-1];p.push(`Most recent ${testName(c).toLowerCase()} (${trackName(c)} ${last.u}): ${last.score}. ${last.score>=22?'A solid result.':last.score>=15?'A developing result with room to grow.':'Below the expected range — extra support is advised.'}`);}
+  if(tests.length){const last=tests[tests.length-1];p.push(`Most recent ${testName(c).toLowerCase()} (${trackName(c)} ${last.u}): ${last.score}. ${(t=>t===2?'A solid result.':t===1?'A developing result with room to grow.':'Below the expected range, extra support is advised.')(testTier(last.score,c))}`);}
   p.push(neuroRec(c.level,dev));
   p.push(`Overall, ${esc(name)} is ${(st.attRate>=75&&dev.length<=1)?'progressing well':'a child to support closely'} this term. Kids Garden remains committed to nurturing confidence, fluency and a love of English.`);
  }
@@ -2690,7 +2713,7 @@ function generateNarrative(cid,name,audience){
 /* Shared report cards (used in coordination Progress Report too) */
 function extraActivitiesCard(cid,name){return (()=>{const others=childPrograms(cid,name).filter(x=>x!==cid);if(!others.length)return '';
     const parts=others.map(x=>{
-      if(x==='fluent_steps'){const n=fluentClassesCount(cid,name);return `<span class="pill" style="background:#1B4F86;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">🌍 Fluent Steps — ${n} class${n===1?'':'es'} attended</span>`;}
+      if(x==='fluent_steps'){const n=fluentClassesCount(cid,name);const rc=fluentRecency(cid,name);const lapsed=rc.weeks!=null&&rc.weeks>=4;const rtxt=rc.lastPresent?(` · last ${rc.lastPresent}`+(lapsed?` (${rc.weeks}w ago, lapsed)`:'')):(n===0?' · not yet attending':'');return `<span class="pill" style="background:${lapsed?'#B23A3A':'#1B4F86'};color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">🌍 Fluent Steps — ${n} class${n===1?'':'es'} attended${rtxt}</span>`;}
       if(x==='cambridge_prep')return `<span class="pill" style="background:#6A1B9A;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">🎓 Cambridge Prep</span>`;
       return `<span class="pill" style="background:#37474F;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">${esc(programLabel(x))}</span>`;
     });
@@ -2729,7 +2752,7 @@ function progressReport(cid,name,opts){
      ${c.kidDollar?`<div class="stat purple"><div class="n">$${st.dollars}</div><div class="l">Kid's Dollars earned</div></div>`:''}</div>
    <hr class="sep"><h3>🎯 Skills development</h3>
    ${reportSkillsHtml(cid,name,'coord')}
-   ${c.track==='phonics'?`<hr class="sep">${phonicsProgressCard(cid,name)}`:c.track==='nursery'?'':`<hr class="sep"><h3>🧪 ${esc(testName(c))}s</h3>${tests.length?`<div class="tbl-wrap"><table><tr><th>${esc(testName(c))}</th><th>Level</th><th>Score</th><th>Feedback</th></tr>${tests.map(t=>`<tr><td>${esc(t.u)}</td><td>${esc(t.level||'Basic')}</td><td>${t.score==null?'—':esc(t.score)}</td><td class="small">${esc(t.feedback||'')}</td></tr>`).join('')}</table></div>`:'<p class="muted small">No tests recorded yet.</p>'}`}
+   ${c.track==='phonics'?`<hr class="sep">${phonicsProgressCard(cid,name)}`:c.track==='nursery'?'':`<hr class="sep"><h3>🧪 ${esc(testName(c))}s</h3>${tests.length?`<div class="tbl-wrap"><table><tr><th style="width:1%;white-space:nowrap">${esc(testName(c))}</th><th style="width:1%;white-space:nowrap">Level</th><th style="width:1%;white-space:nowrap">Score</th><th>Teacher note &amp; focus</th></tr>${tests.map(t=>`<tr><td style="white-space:nowrap">${esc(t.u)}</td><td style="white-space:nowrap">${esc(t.level||'Basic')}</td><td style="white-space:nowrap;font-weight:700">${t.score==null?'—':esc(t.score)+(testMaxFor(c)?'/'+testMaxFor(c):'')}</td><td class="small">${t.feedback?`<span class="muted">${esc(t.feedback)}</span><br>`:''}<b>${esc(coordTestFocus(t,c))}</b></td></tr>`).join('')}</table></div>`:'<p class="muted small">No tests recorded yet.</p>'}`}
    <hr class="sep"><h3>⭐ Key highlights — what to know fast</h3>
    ${(()=>{const H=synthHighlights(cid,name);if(!H.total)return '<p class="muted small">No written notes from class yet.</p>';
      const blk=(title,arr,cls)=>arr.length?`<p class="small" style="margin:4px 0"><b>${title}</b></p><ul style="margin:0 0 8px 18px">${arr.map(o=>`<li class="small"><span class="muted">${esc(o.date)}:</span> ${esc(o.obs)}</li>`).join('')}</ul>`:'';
@@ -2889,7 +2912,7 @@ function parentTestsSection(cid,name,tests){const c=getClass(cid);if(!hasTests(c
  }
  const rows=shown.map(t=>`<tr><td>${esc(t.u)}</td><td>${esc(t.level||'Basic')}</td><td>${t.score==null?'n/a':esc(t.score)}</td></tr>`).join('');
  return `<hr class="sep"><h3>🧪 ${esc(testName(c))}s</h3><div class="tbl-wrap"><table><tr><th>${esc(testName(c))}</th><th>Level</th><th>Score</th></tr>${rows}</table></div>${parentBelowAnalysis(cid,name,tests)}`;}
-function parentBelowAnalysis(cid,name,tests){const low=tests.filter(t=>t.score!=null&&Number(t.score)<6);if(!low.length)return '';
+function parentBelowAnalysis(cid,name,tests){const c=getClass(cid);const thr=testMaxFor(c)?testMaxFor(c)*0.6:6;const low=tests.filter(t=>t.score!=null&&Number(t.score)<thr);if(!low.length)return '';
  let reasons='';low.forEach(t=>{if(t.feedback&&String(t.feedback).trim())reasons+=' '+t.feedback;});
  try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs&&NEG_RE.test(r.obs))reasons+=' '+r.obs;});}catch(e){}
  const blob=reasons.toLowerCase();const f=parentFirst(cid,name);let theme='';
@@ -2915,7 +2938,7 @@ function parentExtraActivities(cid,name){const f=parentFirst(cid,name);let block
  const cb=parentInCamb(cid,name);
  if(cb){const freq=cb.mocks>=3?'with assiduous, committed participation':(cb.mocks>=1?'with steady participation':'with a positive start');blocks+=`<div class="comp" style="border-color:var(--purple)"><h5>🎓 Cambridge Preparation (${esc(cb.level)})</h5><p class="small">${f} takes part in our official Cambridge preparation programme at ${esc(cb.level)} level, ${freq}, strengthening listening, reading, writing and speaking through structured, supportive practice. ${cb.band?'Practice results show steady, encouraging progress and growing exam confidence.':'A wonderful attitude and a strong commitment to this journey.'}</p></div>`;}
  const fl=parentInFluent(cid,name);
- if(fl){const rate=fl.total>0?fl.present/fl.total:0;const freq=(fl.total>=4&&rate>=0.7)?'attending assiduously':(fl.present>0?'taking part regularly':'beginning to take part');blocks+=`<div class="comp" style="border-color:#FF914D"><h5>🗣️ Fluent Steps (conversation club)</h5><p class="small">${f} also joins our Monday Fluent Steps conversation club, ${freq}, a relaxed extra space to speak English freely. This nurtures oral confidence, spontaneity and a genuine love of communicating in English, and it is a meaningful part of ${f}'s development beyond the regular classes.</p></div>`;}
+ if(fl){const rate=fl.total>0?fl.present/fl.total:0;const freq=(fl.total>=4&&rate>=0.7)?'attending assiduously':(fl.present>0?'taking part regularly':'beginning to take part');const rc=fluentRecency(cid,name);let rec='';if(rc.weeks!=null){if(rc.weeks>=4)rec=` Lately we have been missing ${f} at the Monday club (last joined about ${rc.weeks} weeks ago), and we would love to welcome ${f} back, as this regular speaking practice makes a real difference.`;else if(rc.weeks<=1)rec=` ${f} has been joining consistently in recent weeks, which is wonderful for building oral confidence.`;}else if(fl.present===0)rec=` We would love to see ${f} start joining these Monday sessions, as speaking regularly really helps fluency grow.`;blocks+=`<div class="comp" style="border-color:#FF914D"><h5>🗣️ Fluent Steps (conversation club)</h5><p class="small">${f} also joins our Monday Fluent Steps conversation club, ${freq}, a relaxed extra space to speak English freely. This nurtures oral confidence, spontaneity and a genuine love of communicating in English, and it is a meaningful part of ${f}'s development beyond the regular classes.${rec}</p></div>`;}
  if(!blocks)return '';
  return `<hr class="sep"><h3>✨ Extra activities</h3>${blocks}`;}
 function parentNeuroComment(cid,name){const c=getClass(cid);const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const young=["Nursery","Kinder","KinderPlus","K1"].includes(c.level);
@@ -3195,7 +3218,7 @@ function narrativeBullets(cid,name){
  if(prof.length)B.push(`<b>Confident in</b> ${prof.map(esc).join(', ')}.`);
  if(dev.length)B.push(`<b>Priority to develop:</b> ${dev.map(esc).join(', ')} — targeted, multisensory practice.`);
  if(!prof.length&&!dev.length)B.push('End-of-unit skill assessments still pending.');
- if(tests.length){const last=tests[tests.length-1];B.push(`<b>Latest test (${esc(trackName(c))} ${last.u}):</b> ${last.score} — ${last.score>=22?'solid':last.score>=15?'developing':'below the expected range, extra support advised'}.`);}
+ if(tests.length){const last=tests[tests.length-1];B.push(`<b>Latest test (${esc(trackName(c))} ${last.u}):</b> ${last.score} — ${(t=>t===2?'solid':t===1?'developing':'below the expected range, extra support advised')(testTier(last.score,c))}.`);}
  B.push(neuroRec(c.level,dev));
  B.push(`<b>Overall:</b> ${(st.attRate>=75&&dev.length<=1)?'progressing well':'a child to support closely'} this term.`);
  return B;
@@ -3340,7 +3363,7 @@ function studentReport(cid,name){
   ${att?`<div class="flag warn"><span class="fi">🔎</span><div><b>Needs attention:</b> ${att.reasons.map(esc).join(' · ')}</div></div>`:`<div class="flag ok"><span class="fi">✅</span><div><b>${esc(name)} is on track.</b></div></div>`}
   ${(()=>{const others=childPrograms(cid,name).filter(x=>x!==cid);if(!others.length)return '';
     const parts=others.map(x=>{
-      if(x==='fluent_steps'){const n=fluentClassesCount(cid,name);return `<span class="pill" style="background:#1B4F86;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">🌍 Fluent Steps — ${n} class${n===1?'':'es'} attended</span>`;}
+      if(x==='fluent_steps'){const n=fluentClassesCount(cid,name);const rc=fluentRecency(cid,name);const lapsed=rc.weeks!=null&&rc.weeks>=4;const rtxt=rc.lastPresent?(` · last ${rc.lastPresent}`+(lapsed?` (${rc.weeks}w ago, lapsed)`:'')):(n===0?' · not yet attending':'');return `<span class="pill" style="background:${lapsed?'#B23A3A':'#1B4F86'};color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">🌍 Fluent Steps — ${n} class${n===1?'':'es'} attended${rtxt}</span>`;}
       if(x==='cambridge_prep')return `<span class="pill" style="background:#6A1B9A;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">🎓 Cambridge Prep</span>`;
       return `<span class="pill" style="background:#37474F;color:#fff;font-weight:700;margin:0 6px 6px 0;display:inline-block">${esc(programLabel(x))}</span>`;
     });
@@ -3401,7 +3424,7 @@ function studentHistory(cid,name){
  const body=items.length?items.map(it=>{
    if(it.type==='action')return `<div class="comp" style="border-color:#C9A24B;background:#FBF4E2"><h5>📌 Action plan ${it.date?'· '+esc(it.date):''}${it.done?' <span class="badge b-present">resolved</span>':(it.due&&dueLate(it.due)?' <span class="badge b-absent">overdue</span>':' <span class="badge b-late">open</span>')}</h5><div class="small">${esc(it.obs)}${it.point?`<br><span class="muted">For: ${esc(it.point)}</span>`:''}${it.due?`<br><span class="muted">Deadline: ${esc(it.due)}</span>`:''}</div></div>`;
    if(it.type==='coordnote')return `<div class="comp" style="border-color:var(--purple);background:#F3E6F3"><h5>🗒️ Coordination note ${it.date?'· '+esc(it.date):''}</h5><div class="small">${esc(it.obs)}</div></div>`;
-   if(it.type==='test')return `<div class="comp" style="border-color:#2C6FB0;background:#E7EEF6"><h5>🧪 ${esc(c.mock?'Mock Test':'Unit Test')} ${esc(it.u)} ${it.date?'· '+esc(it.date):''} ${it.score!=null?`<span class="badge ${it.score>=22?'b-present':it.score>=15?'b-late':'b-absent'}">${esc(it.score)}</span>`:''} <span class="muted small">${esc(it.level||'')}</span></h5>${it.obs?`<div class="small">${esc(it.obs)}</div>`:''}</div>`;
+   if(it.type==='test')return `<div class="comp" style="border-color:#2C6FB0;background:#E7EEF6"><h5>🧪 ${esc(c.mock?'Mock Test':'Unit Test')} ${esc(it.u)} ${it.date?'· '+esc(it.date):''} ${it.score!=null?`<span class="badge ${(t=>t===2?'b-present':t===1?'b-late':'b-absent')(testTier(it.score,c))}">${esc(it.score)}</span>`:''} <span class="muted small">${esc(it.level||'')}</span></h5>${it.obs?`<div class="small">${esc(it.obs)}</div>`:''}</div>`;
    const badges=`${it.att?`<span class="badge ${it.att==='Present'?'b-present':it.att==='Absent'?'b-absent':'b-late'}">${esc(it.att)}</span> `:''}${it.hw?`<span class="badge ${it.hw==='Done'?'b-prof':it.hw==='Didn\'t do'?'b-absent':'b-na'}">HW: ${esc(it.hw)}</span> `:''}${(it.phon&&it.phon.indexOf('—')!==0)?`<span class="badge ${it.phon.indexOf('Secure')===0?'b-prof':it.phon.indexOf('Blends')===0?'b-dev':'b-late'}">🔡 ${esc(it.phon)}</span> `:''}${it.dollar?`<span class="badge b-na">$${esc(it.dollar)}</span>`:''}`;
    return `<div class="comp"><h5>📅 ${esc(it.date||'—')} ${it.theme?'· '+esc(it.theme):''}</h5><div style="margin-bottom:4px">${badges}</div>${it.obs?`<div class="small">${esc(it.obs)}</div>`:'<div class="small muted">No written comment.</div>'}</div>`;
  }).join('') : '<p class="muted small">Nothing recorded yet.</p>';
