@@ -2860,9 +2860,34 @@ function parentOverviewBullets(cid,name){const st=studentStats(cid,name);const p
  if(prof.length)B.push(`<b>Confident in:</b> ${prof.map(esc).join(', ')}.`);
  B.push(`<b>Overall:</b> ${parentOverall(cid,name)}`);
  return B;}
+/* Parent-facing note for a single unit test. Acts as a bilingual-development specialist: interprets the
+   score band + the theme of the teacher's note (never echoing the raw note) into gentle, trustworthy words. */
+function parentTestComment(cid,name,t,max){
+ const f=parentFirst(cid,name);
+ if(t.score==null)return 'To be completed.';
+ const m=max||10;const band=Number(t.score)/m;const fb=String(t.feedback||'').toLowerCase();
+ let topic='this unit',isUnit=true;
+ if(/vocab|word|crayon|name of|noun/.test(fb)){topic='the new vocabulary';isUnit=false;}
+ else if(/listen/.test(fb)){topic='the listening part';isUnit=false;}
+ else if(/read/.test(fb)){topic='the reading';isUnit=false;}
+ else if(/writ|letter|mirror|spell|trace/.test(fb)){topic='letter formation and writing';isUnit=false;}
+ else if(/understand|instruct|confus|didn'?t get|did not get/.test(fb)){topic='following the instructions';isUnit=false;}
+ else if(/grammar|structure|sentence|tense/.test(fb)){topic='the sentence structures';isUnit=false;}
+ else if(/speak|pronun|oral/.test(fb)){topic='speaking';isUnit=false;}
+ else if(/number|count|math/.test(fb)){topic='the numbers';isUnit=false;}
+ if(band>=0.8)return `${f} showed a secure understanding of this unit.`;
+ if(band>=0.6)return isUnit?`A good result, with a little consolidation still to do.`:`A good result. A little more practice with ${topic} will help ${f} feel fully secure.`;
+ if(band>=0.4)return isUnit?`This unit was a little more challenging, and we are revisiting it in class with ${f}.`:`This unit was a little more challenging, and we are revisiting ${topic} in class with ${f}.`;
+ return isUnit?`This unit needs more support, so we are giving ${f} extra practice. This is a normal step in the learning journey.`:`We are giving ${f} extra practice with ${topic}. This is a normal step in the learning journey.`;
+}
 function parentTestsSection(cid,name,tests){const c=getClass(cid);if(!hasTests(c))return '';
- const rows=tests.filter(t=>t.score!=null||t.level).map(t=>`<tr><td>${esc(t.u)}</td><td>${esc(t.level||'Basic')}</td><td>${t.score==null?'n/a':esc(t.score)}</td></tr>`).join('');
- if(!rows)return '';
+ const max=testMaxFor(c);const shown=tests.filter(t=>t.score!=null||t.level);
+ if(!shown.length)return '';
+ if(max){
+   const rows=shown.map(t=>`<tr><td style="white-space:nowrap">${esc(t.u)}</td><td style="white-space:nowrap">${esc(t.level||'Basic')}</td><td style="white-space:nowrap;font-weight:700">${t.score==null?'n/a':esc(t.score)+'/'+max}</td><td class="small">${esc(parentTestComment(cid,name,t,max))}</td></tr>`).join('');
+   return `<hr class="sep"><h3>🧪 ${esc(testName(c))}s</h3><div class="tbl-wrap"><table><tr><th style="width:1%;white-space:nowrap">${esc(testName(c))}</th><th style="width:1%;white-space:nowrap">Level</th><th style="width:1%;white-space:nowrap">Score</th><th>What this means</th></tr>${rows}</table></div>${parentBelowAnalysis(cid,name,tests)}`;
+ }
+ const rows=shown.map(t=>`<tr><td>${esc(t.u)}</td><td>${esc(t.level||'Basic')}</td><td>${t.score==null?'n/a':esc(t.score)}</td></tr>`).join('');
  return `<hr class="sep"><h3>🧪 ${esc(testName(c))}s</h3><div class="tbl-wrap"><table><tr><th>${esc(testName(c))}</th><th>Level</th><th>Score</th></tr>${rows}</table></div>${parentBelowAnalysis(cid,name,tests)}`;}
 function parentBelowAnalysis(cid,name,tests){const low=tests.filter(t=>t.score!=null&&Number(t.score)<6);if(!low.length)return '';
  let reasons='';low.forEach(t=>{if(t.feedback&&String(t.feedback).trim())reasons+=' '+t.feedback;});
