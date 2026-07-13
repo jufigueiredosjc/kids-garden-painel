@@ -2889,11 +2889,12 @@ function parentTestComment(cid,name,t,max){
  const f=parentFirst(cid,name);
  if(t.score==null)return 'To be completed.';
  const m=max||10;const band=Number(t.score)/m;const fb=String(t.feedback||'').toLowerCase();
+ const young=["Nursery","Kinder","KinderPlus","K1"].includes((getClass(cid)||{}).level);
  let topic='this unit',isUnit=true;
  if(/vocab|word|crayon|name of|noun/.test(fb)){topic='the new vocabulary';isUnit=false;}
  else if(/listen/.test(fb)){topic='the listening part';isUnit=false;}
  else if(/read/.test(fb)){topic='the reading';isUnit=false;}
- else if(/writ|letter|mirror|spell|trace/.test(fb)){topic='letter formation and writing';isUnit=false;}
+ else if(/writ|letter|mirror|spell|trace/.test(fb)){topic=young?'letter formation and writing':'written accuracy (spelling and structure)';isUnit=false;}
  else if(/understand|instruct|confus|didn'?t get|did not get/.test(fb)){topic='following the instructions';isUnit=false;}
  else if(/grammar|structure|sentence|tense/.test(fb)){topic='the sentence structures';isUnit=false;}
  else if(/speak|pronun|oral/.test(fb)){topic='speaking';isUnit=false;}
@@ -2985,7 +2986,22 @@ function parentDevPositive(cid,name,seed){const f=parentFirst(cid,name);let obs=
 /* Attendance read from the child's real registered history. Signals 20%+ absences gently but clearly. */
 function parentDevAttendance(cid,name,seed){const st=studentStats(cid,name);const f=parentFirst(cid,name);const den=st.p+st.a+st.l;if(den<4)return '';
  if(st.a/den>=0.2)return pickN([`We have noticed that ${f} has missed a number of classes this term. Because each lesson builds on the one before, a more regular presence will help ${f} enjoy the full benefit of this progress, and we are always here to make the routine easier.`,`With warmth we share that ${f} has been away from class fairly often lately. English settles best with steady, regular contact, so coming along more consistently will really help ${f} keep this lovely momentum, and we are happy to support that together.`,`One gentle note: ${f} has missed several classes this term. Since each class connects to the next, more regular attendance will let ${f} get the most from every step, and we are here to help in any way we can.`],seed);
+ if(cefrForLevel(getClass(cid).level)&&st.l/den>=0.2)return pickN([`One caring note: ${f} has arrived late to a number of classes. We open each lesson with key warm-up and review, so arriving on time will help ${f} settle in and get the full benefit of every class, and we are happy to help make the routine smoother.`,`We gently share that ${f} has had several late arrivals this term. Since the first minutes set up the whole lesson, being there from the start will really help ${f} keep pace, and we are here to support that together.`],seed>>2);
  if(st.attRate!=null&&st.attRate>=90)return pickN([`${f}'s consistent presence in class gives the regular contact with English that helps most.`,`${f} attends so faithfully, and that steady rhythm is one of the quiet secrets behind this progress.`,`The constancy of ${f}'s attendance is a real gift to the learning, giving English the regular practice it thrives on.`],seed);
+ return '';}
+/* CEFR framing: K6 = Cambridge Flyers (A2), TeensB1 = B1 Preliminary (B1). Reuses CAMB_INFO descriptors. */
+function cefrForLevel(level){if(typeof CAMB_INFO==='undefined')return null;if(level==='K6')return {exam:'Cambridge Flyers',cefr:'A2',info:CAMB_INFO.Flyers};if(level==='TeensB1')return {exam:'B1 Preliminary',cefr:'B1',info:CAMB_INFO.B1};return null;}
+/* Parent-facing CEFR paragraph — only for K6/TeensB1, woven with the child's own strengths and next steps. */
+function parentCefrNote(cid,name){const c=getClass(cid);const cf=cefrForLevel(c.level);if(!cf)return '';const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const seed=seedOf(cid,name);
+ let s=pickN([`At this stage, ${f} is working at ${cf.exam} level, which corresponds to ${cf.cefr} on the Common European Framework (CEFR). The aim now is to use English with growing independence across listening, reading, writing and speaking. `,`${f} is studying at ${cf.exam} level, equivalent to ${cf.cefr} on the European framework (CEFR), where English becomes a real, practical tool across the four skills. `],seed);
+ if(prof.length)s+=pickN([`Within this level, ${f} already shows genuine strength in ${andList(prof.slice(0,2))}. `,`At ${cf.cefr}, ${andList(prof.slice(0,2))} ${prof.length>1?'stand':'stands'} out as a real strength for ${f}. `],seed>>3);
+ if(dev.length)s+=pickN([`The natural next step at this level is to strengthen ${andList(dev.slice(0,2))}, which we are working on steadily together. `,`To move confidently through ${cf.cefr}, a focused effort on ${andList(dev.slice(0,2))} will make the difference, and we are guiding ${f} there. `],seed>>5);
+ else if(prof.length)s+=`${f} is progressing well across the skills this level asks for. `;
+ return `<div style="background:#F1F7FF;border:1px solid #2C6FB0;border-radius:10px;padding:10px 12px;margin-top:10px;line-height:1.6">🎓 ${esc(s.trim())}</div>`;}
+/* Home-practice line for parents — only K6/TeensB1, gentle, fires from real homework data. */
+function parentDevHomework(cid,name,seed){const c=getClass(cid);if(!cefrForLevel(c.level))return '';const st=studentStats(cid,name);if(st.hwRate==null)return '';const f=parentFirst(cid,name);
+ if(st.hwRate<50)return pickN([`Homework has been arriving less often lately, and a short, steady practice at home would give ${f}'s progress a real boost. We are glad to suggest simple, enjoyable ways to build the habit.`,`A little more regular practice at home would help ${f} consolidate what we do in class. Even ten focused minutes makes a difference, and we can share easy ideas to fit it into the routine.`],seed);
+ if(st.hwRate>=90)return pickN([`${f}'s consistent homework shows a strong study habit that is really paying off.`,`The care ${f} puts into completing homework is clearly supporting this steady progress.`],seed);
  return '';}
 function parentDevNoteAuto(cid,name){
  const c=getClass(cid);const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const st=studentStats(cid,name);
@@ -2999,7 +3015,7 @@ function parentDevNoteAuto(cid,name){
  const themes=parentDevThemes(cid,name,seed).slice(0,att?1:2);
  if(themes.length){themes.forEach(t=>{s+=t+' ';});}
  else if(dev.length){const list=andList(dev.slice(0,2));s+=pickN([`A continued focus on ${list}, at ${f}'s own pace, will help keep this progress steady, as a calm and confident child learns best. `,`A little more attention to ${list}, without pressure, will help ${f} keep moving forward. `],seed>>15);}
- if(att)s+=att+' ';
+ if(att)s+=att+' ';const hw=parentDevHomework(cid,name,seed>>13);if(hw)s+=hw+' ';
  s+=pickN([`Overall, ${f} is developing well, and we are glad to work alongside your family. `,`In all, ${f} is progressing steadily, and it is good to share this with you. `,`In short, ${f} keeps growing with confidence, and we are glad to be part of it with your family. `,`Above all, ${f} is growing in a healthy, steady way, and we value being part of it. `],seed>>13);
  return s.trim();
 }
@@ -3160,6 +3176,7 @@ function parentReportCard(cid,name){
    <div class="muted small">${semesterLabel()} · reflects all logged classes</div>
    <hr class="sep"><h3>🌟 How ${f} is doing</h3>
    <div class="narr"><ul style="margin:0 0 0 18px">${parentOverviewBullets(cid,name).map(x=>`<li style="margin-bottom:5px">${x}</li>`).join('')}</ul></div>
+   ${parentCefrNote(cid,name)}
    <hr class="sep"><h3>📊 Attendance & engagement</h3>
    <div class="stat-grid" style="margin-bottom:8px">
      <div class="stat blue"><div class="n">${st.attRate==null?'—':st.attRate+'%'}</div><div class="l">Attendance</div></div>
@@ -3219,6 +3236,7 @@ function narrativeBullets(cid,name){
  if(dev.length)B.push(`<b>Priority to develop:</b> ${dev.map(esc).join(', ')} — targeted, multisensory practice.`);
  if(!prof.length&&!dev.length)B.push('End-of-unit skill assessments still pending.');
  if(tests.length){const last=tests[tests.length-1];B.push(`<b>Latest test (${esc(trackName(c))} ${last.u}):</b> ${last.score} — ${(t=>t===2?'solid':t===1?'developing':'below the expected range, extra support advised')(testTier(last.score,c))}.`);}
+ const cf=cefrForLevel(c.level);if(cf)B.push(`<b>CEFR target:</b> ${cf.exam} (${cf.cefr}) — benchmark the four skills against ${cf.cefr} can-do descriptors${dev.length?`; priority: ${dev.map(esc).join(', ')}`:'; on track across skills'}.`);
  B.push(neuroRec(c.level,dev));
  B.push(`<b>Overall:</b> ${(st.attRate>=75&&dev.length<=1)?'progressing well':'a child to support closely'} this term.`);
  return B;
