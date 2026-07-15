@@ -3161,43 +3161,54 @@ function reportSkillsHtml(cid,name,mode){
  const msg=mode==='coord'?'Skills will appear once the teacher completes an end-of-unit assessment.':'Skills will appear after the first assessment.';
  return Object.keys(skillSummary).length?`<div class="tbl-wrap"><table><tr>${set.map(function(s){return `<th>${esc(s)}</th>`;}).join('')}</tr><tr>${set.map(function(s){const v=skillSummary[s]||'Not assessed';return `<td><span class="badge ${ratingClass(v)}">${esc(v)}</span></td>`;}).join('')}</tr></table></div>`:`<p class="muted small">${msg}</p>`;
 }
-function parentReportCard(cid,name){
+/* sel: optional {sectionKey:bool}. Absent/undefined => every section included (default, unchanged behaviour).
+   The school header and the closing care note are ALWAYS included; only the body sections are toggleable. */
+function parentReportCard(cid,name,sel){const inc=k=>!sel||sel[k]!==false;
  const c=getClass(cid);const L=LEVELS[c.level]||{};const st=studentStats(cid,name);const set=SKILLSETS[c.level]||SKILLSETS.K1;
  const skl=STATE.skills[cid]||{};const skillSummary={};
  Object.values(skl).forEach(per=>{const r=per[name];if(r)Object.entries(r).forEach(([s,v])=>{if(v&&v!=='Not assessed'){if(v==='Proficient'||skillSummary[s]!=='Proficient')skillSummary[s]=v;}});});
  const tests=[];const t=STATE.tests[cid]||{};Object.entries(t).forEach(([u,rows])=>{const r=rows.find(x=>x.student===name);if(r)tests.push({u,...r});});
  const f=parentFirst(cid,name);
- return `<div class="card rpt-card">
-   ${parentHeader()}
-   <div class="row c2" style="margin-bottom:6px">
-     <div><label class="fl">Student</label><div style="font-size:20px;font-weight:800;color:var(--navy)">${esc(displayName(cid,name))}</div></div>
-     <div><label class="fl">Age</label><div>${esc(c.age||L.age||'')}</div><div style="margin-top:6px"><label class="fl">Teacher</label><div>${esc(c.teacher)}</div></div></div>
-   </div>
-   <div class="muted small">${semesterLabel()} · reflects all logged classes</div>
-   <hr class="sep"><h3>🌟 How ${f} is doing</h3>
-   <div class="narr"><ul style="margin:0 0 0 18px">${parentOverviewBullets(cid,name).map(x=>`<li style="margin-bottom:5px">${x}</li>`).join('')}</ul></div>
-   ${parentCefrNote(cid,name)}
-   <hr class="sep"><h3>📊 Attendance & engagement</h3>
-   <div class="stat-grid" style="margin-bottom:8px">
-     <div class="stat blue"><div class="n">${st.attRate==null?'—':st.attRate+'%'}</div><div class="l">Attendance</div></div>
-     <div class="stat"><div class="n">${st.seen}</div><div class="l">Classes recorded</div></div></div>
-   <hr class="sep"><h3>🎯 Skills development</h3>
-   ${reportSkillsHtml(cid,name,'parent')}
-   ${c.track==='phonics'?`<hr class="sep"><h3>🔡 Jolly Phonics</h3><div class="narr">${esc(parentPhonics(cid,name))}</div>`:''}
-   ${hasTests(c)?parentTestsSection(cid,name,tests):''}
-   <hr class="sep"><h3>⭐ Highlights</h3>
-   ${parentHighlights(cid,name)}
-   ${parentExtraActivities(cid,name)}
-   <hr class="sep"><h3>🧠 A note on ${f}'s development</h3>
-   <div class="narr">${esc(parentDevNoteText(cid,name))}</div>
-   <hr class="sep"><p class="center muted small">🌱 At Kids Garden we truly care about every child. Thank you for growing with us.</p>
- </div>`;}
+ let S='';
+ if(inc('howDoing'))S+=`<hr class="sep"><h3>🌟 How ${f} is doing</h3><div class="narr"><ul style="margin:0 0 0 18px">${parentOverviewBullets(cid,name).map(x=>`<li style="margin-bottom:5px">${x}</li>`).join('')}</ul></div>${parentCefrNote(cid,name)}`;
+ if(inc('attendance'))S+=`<hr class="sep"><h3>📊 Attendance & engagement</h3><div class="stat-grid" style="margin-bottom:8px"><div class="stat blue"><div class="n">${st.attRate==null?'—':st.attRate+'%'}</div><div class="l">Attendance</div></div><div class="stat"><div class="n">${st.seen}</div><div class="l">Classes recorded</div></div></div>`;
+ if(inc('skills'))S+=`<hr class="sep"><h3>🎯 Skills development</h3>${reportSkillsHtml(cid,name,'parent')}${c.track==='phonics'?`<hr class="sep"><h3>🔡 Jolly Phonics</h3><div class="narr">${esc(parentPhonics(cid,name))}</div>`:''}`;
+ if(inc('tests')&&hasTests(c))S+=parentTestsSection(cid,name,tests);
+ if(inc('highlights'))S+=`<hr class="sep"><h3>⭐ Highlights</h3>${parentHighlights(cid,name)}`;
+ if(inc('extra'))S+=parentExtraActivities(cid,name);
+ if(inc('devNote'))S+=`<hr class="sep"><h3>🧠 A note on ${f}'s development</h3><div class="narr">${esc(parentDevNoteText(cid,name))}</div>`;
+ return `<div class="card rpt-card">${parentHeader()}<div class="row c2" style="margin-bottom:6px"><div><label class="fl">Student</label><div style="font-size:20px;font-weight:800;color:var(--navy)">${esc(displayName(cid,name))}</div></div><div><label class="fl">Age</label><div>${esc(c.age||L.age||'')}</div><div style="margin-top:6px"><label class="fl">Teacher</label><div>${esc(c.teacher)}</div></div></div></div><div class="muted small">${semesterLabel()} · reflects all logged classes</div>${S}<hr class="sep"><p class="center muted small">🌱 At Kids Garden we truly care about every child. Thank you for growing with us.</p></div>`;}
 function parentBlock(cid,n){const c=getClass(cid);return `<table class="rpt-block"><thead><tr><td><div class="rpt-runhead">Progress Report · ${esc(displayName(cid,n))} · ${esc(c.teacher)}</div></td></tr></thead><tbody><tr><td>${parentReportCard(cid,n)}</td></tr></tbody></table>`;}
 function parentReportFull(){const cid=RPT.cid,name=RPT.name;const c=getClass(cid);if(!c)return '';
- if(name==='__ALL__'){const studs=activeStudents(c);return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParentAll('${cid}')" style="margin-left:8px">🖨 Print all / Save PDF</button> <button class="btn" style="background:#1B7A3A;border-color:#1B7A3A;margin-left:6px" onclick="downloadEachReport('${cid}','parent')">⬇️ Download each (individual files)</button> <span class="muted small" style="margin-left:8px">Parent reports — ${studs.length} student${studs.length===1?'':'s'} · one clean A4 page each</span>${semesterPicker()}</div>${studs.length?studs.map(n=>parentBlock(cid,n)).join(''):'<div class="card"><p class="muted">No active students.</p></div>'}`;}
- return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParent('${cid}','${esc(name).replace(/'/g,"\\'")}')" style="margin-left:8px">🖨 Print / Save PDF</button> <span class="muted small" style="margin-left:8px">Parent report</span>${semesterPicker()}</div>${parentBlock(cid,name)}${parentDevEditPanel(cid,name)}`;}
+ if(name==='__ALL__'){const studs=activeStudents(c);return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParentAll('${cid}')" style="margin-left:8px">🖨 Print all / Save PDF</button> <button class="btn" style="background:#1B7A3A;border-color:#1B7A3A;margin-left:6px" onclick="downloadEachReport('${cid}','parent')">⬇️ Download each (individual files)</button>${canPickSections(c)?` <button class="btn" style="background:#6A1B9A;border-color:#6A1B9A;margin-left:6px" onclick="parentPickModal('${cid}','__ALL__')">🧩 Choose sections & download</button>`:''} <span class="muted small" style="margin-left:8px">Parent reports — ${studs.length} student${studs.length===1?'':'s'} · one clean A4 page each</span>${semesterPicker()}</div>${studs.length?studs.map(n=>parentBlock(cid,n)).join(''):'<div class="card"><p class="muted">No active students.</p></div>'}`;}
+ return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParent('${cid}','${esc(name).replace(/'/g,"\\'")}')" style="margin-left:8px">🖨 Print / Save PDF</button>${canPickSections(c)?` <button class="btn" style="background:#6A1B9A;border-color:#6A1B9A;margin-left:6px" onclick="parentPickModal('${cid}','${esc(name).replace(/'/g,"\\'")}')">🧩 Choose sections & send</button>`:''} <span class="muted small" style="margin-left:8px">Parent report</span>${semesterPicker()}</div>${parentBlock(cid,name)}${parentDevEditPanel(cid,name)}`;}
 function printParent(cid,name){openReportPrint('Progress Report — '+displayName(cid,name),parentBlock(cid,name));}
 function printParentAll(cid){const c=getClass(cid);openReportPrint('Progress Reports — '+(c?c.name:''),activeStudents(c).map(n=>parentBlock(cid,n)).join(''));}
+/* Coordination picks which sections of the parent report to send. Purely a rendering/download choice — no history touched. */
+const PARENT_SECTIONS=[["howDoing","🌟 How the child is doing"],["attendance","📊 Attendance & engagement"],["skills","🎯 Skills development"],["tests","🧪 Unit tests"],["highlights","⭐ Highlights"],["extra","✨ Extra activities"],["devNote","🧠 A note on development (coordination's message to the family)"]];
+const PICK_LEVELS=["K1","K2","K3","K4","K5","K6","TeensB1","TeensB2"];
+function canPickSections(c){return !!(c&&PICK_LEVELS.indexOf(c.level)>=0);}
+function parentPickModal(cid,name){const c=getClass(cid);if(!c)return;const ex=document.getElementById('psmodal');if(ex)ex.remove();
+ const all=name==='__ALL__';const who=all?('all '+activeStudents(c).length+' students'):displayName(cid,name);
+ const rows=PARENT_SECTIONS.filter(s=>s[0]!=='tests'||hasTests(c)).map(s=>`<label style="display:flex;align-items:center;gap:9px;padding:6px 0;cursor:pointer"><input type="checkbox" class="pschk" value="${s[0]}" checked style="width:17px;height:17px"> <span>${s[1]}</span></label>`).join('');
+ const ns=esc(name).replace(/'/g,"\\'");
+ const w=document.createElement('div');w.id='psmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:460px;text-align:left"><h2 style="color:var(--navy);font-size:19px">🧩 Choose what to send — ${esc(who)}</h2>
+  <p class="small muted">Tick the parts of the report you want the family to receive. The school header and our closing care note are always included. Everything stays in our gentle, parent-facing tone, and no child's history is ever changed.</p>
+  <div style="margin:6px 0 4px;border:1px solid var(--line,#e3e3e3);border-radius:10px;padding:8px 12px">${rows}</div>
+  <div class="small muted" style="margin:6px 0 2px"><a onclick="document.querySelectorAll('#psmodal .pschk').forEach(function(e){e.checked=true;})" style="cursor:pointer;color:var(--navy);text-decoration:underline">Select all</a> · <a onclick="document.querySelectorAll('#psmodal .pschk').forEach(function(e){e.checked=false;})" style="cursor:pointer;color:var(--navy);text-decoration:underline">Clear all</a></div>
+  <div style="margin-top:12px"><button class="btn" style="background:#1B7A3A;border-color:#1B7A3A" onclick="parentPickGo('${cid}','${ns}','dl')">⬇️ Download${all?' each':''}</button>
+  <button class="btn navy" onclick="parentPickGo('${cid}','${ns}','print')" style="margin-left:6px">🖨 Print / PDF</button>
+  <button class="btn ghost" onclick="document.getElementById('psmodal').remove()" style="margin-left:6px">Cancel</button></div></div>`;
+ document.body.appendChild(w);}
+function parentPickSel(){const sel={};PARENT_SECTIONS.forEach(s=>{sel[s[0]]=false;});document.querySelectorAll('#psmodal .pschk').forEach(e=>{if(e.checked)sel[e.value]=true;});return sel;}
+function parentBlockSel(cid,n,sel){const c=getClass(cid);return `<table class="rpt-block"><thead><tr><td><div class="rpt-runhead">Progress Report · ${esc(displayName(cid,n))} · ${esc(c.teacher)}</div></td></tr></thead><tbody><tr><td>${parentReportCard(cid,n,sel)}</td></tr></tbody></table>`;}
+function parentPickGo(cid,name,mode){const c=getClass(cid);if(!c)return;const sel=parentPickSel();const m=document.getElementById('psmodal');if(m)m.remove();
+ if(name==='__ALL__'){const studs=activeStudents(c);if(!studs.length){toast('No active students');return;}
+   if(mode==='print'){openReportPrint('Progress Reports — '+c.name,studs.map(n=>parentBlockSel(cid,n,sel)).join(''));return;}
+   toast('⬇️ Preparing '+studs.length+' files…');studs.forEach((n,i)=>setTimeout(()=>{const doc=reportDocString('Progress Report — '+displayName(cid,n),parentReportCard(cid,n,sel));const safe=(displayName(cid,n)||n).replace(/[^A-Za-z0-9À-ÿ \-]/g,'').replace(/\s+/g,' ').trim()||'student';downloadHtmlFile('Progress Report - '+safe+' (Parents).html',doc);},i*350));return;}
+ if(mode==='print'){openReportPrint('Progress Report — '+displayName(cid,name),parentBlockSel(cid,name,sel));return;}
+ const doc=reportDocString('Progress Report — '+displayName(cid,name),parentReportCard(cid,name,sel));const safe=(displayName(cid,name)||name).replace(/[^A-Za-z0-9À-ÿ \-]/g,'').replace(/\s+/g,' ').trim()||'student';downloadHtmlFile('Progress Report - '+safe+' (Parents).html',doc);}
 function fillRptStudentsP(){const c=getClass($("#rp_class_p").value);if(!c)return;$("#rp_stu_p").innerHTML='<option value="__ALL__">🧑‍🎓 All students (one document)</option>'+c.students.map(s=>`<option>${esc(s)}</option>`).join('');}
 function openReportParent(cid,name){RPT={cid,name,mode:'parent'};COORD_OK=true;COORD_TAB='reports';renderCoord();}
 function saveNote(cid,name){STATE.notes[cid+'::'+name]=$("#rpt_note").value;save();toast("✅ Note saved");}
