@@ -2820,6 +2820,7 @@ function downloadEachReport(cid,mode){const c=getClass(cid);if(!c)return;const s
  },i*350);});}
 function openReportPrint(title,html){
  const w=window.open('','_blank','width=920,height=1040');if(!w){toast('Please allow pop-ups to print / save the PDF');return;}
+ let css='';document.querySelectorAll('style').forEach(function(s){css+=s.outerHTML;});
  w.document.open();
  var compact='<style>@page{size:A4;margin:9mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{background:#fff;margin:0;padding:10px;font-size:11.5px;line-height:1.33;color:#1f2937}.no-print{display:none!important}'
   +'.rpt-card{border:none!important;box-shadow:none!important;padding:0!important;margin:0 0 4px!important}'
