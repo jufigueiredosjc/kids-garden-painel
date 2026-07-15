@@ -2871,7 +2871,7 @@ const CHILD_TRAITS=[
 ];
 function childPositiveTraits(cid,name){let obs='';try{sessionsOf(cid).forEach(function(s){const r=(s.rows||{})[name];if(r&&r.obs&&POS_RE.test(r.obs)&&!NEG_RE.test(r.obs))obs+=' '+r.obs;});}catch(e){}const b=obs.toLowerCase();const hits=[];CHILD_TRAITS.forEach(function(t){const m=b.match(new RegExp(t[1],'g'));if(m)hits.push({key:t[0],phrase:t[2],n:m.length});});hits.sort(function(a,b){return b.n-a.n;});return hits;}
 function parentOverall(cid,name){const f=parentFirst(cid,name);const seed=seedOf(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const tr=childPositiveTraits(cid,name);
- let s=pickN([`${f} is developing well and taking to English naturally`,`${f} is making steady progress in English`,`${f} is settling into English and gaining confidence`,`${f} brings a curious energy to class and is progressing in English`],seed);
+ let s=pickN([`${f} is developing well and taking to English naturally`,`${f} is making steady progress in English`,`${f} is settling into English and gaining confidence`,`${f} brings a curious energy to class and is progressing in English`,`${f} is growing into English at a comfortable, natural pace`,`${f} continues to build a genuine connection with English`,`${f} is finding a real rhythm with English this term`,`${f} approaches English with interest and keeps moving forward`],seed);
  if(tr.length)s+=`, and we especially notice ${tr[0].phrase}`;
  else if(prof.length)s+=`, with confidence in ${andList(prof.slice(0,2))}`;
  s+='. ';
@@ -2900,10 +2900,11 @@ function parentTestComment(cid,name,t,max){
  else if(/grammar|structure|sentence|tense/.test(fb)){topic='the sentence structures';isUnit=false;}
  else if(/speak|pronun|oral/.test(fb)){topic='speaking';isUnit=false;}
  else if(/number|count|math/.test(fb)){topic='the numbers';isUnit=false;}
- if(band>=0.8)return `${f} showed a secure understanding of this unit.`;
- if(band>=0.6)return isUnit?`A good result, with a little consolidation still to do.`:`A good result. A little more practice with ${topic} will help ${f} feel fully secure.`;
- if(band>=0.4)return isUnit?`This unit was a little more challenging, and we are revisiting it in class with ${f}.`:`This unit was a little more challenging, and we are revisiting ${topic} in class with ${f}.`;
- return isUnit?`This unit needs more support, so we are giving ${f} extra practice. This is a normal step in the learning journey.`:`We are giving ${f} extra practice with ${topic}. This is a normal step in the learning journey.`;
+ const sd=(seedOf(cid,name)+(Number(t.u)||0)*101)>>>0;
+ if(band>=0.8)return pickN([`${f} showed a secure understanding of this unit.`,`A confident result that shows this unit is well understood.`,`${f} handled this unit with real assurance.`,`This unit is secure for ${f}, with the key ideas clearly in place.`,`A strong result; ${f} has this unit well in hand.`],sd);
+ if(band>=0.6)return isUnit?pickN([`A good result, with a little consolidation still to do.`,`${f} did well here, with just a little more to firm up.`,`A solid result; a touch more practice will make it fully secure.`,`Good progress on this unit, with a small amount left to consolidate.`,`${f} understood most of this unit, and a short review will complete it.`],sd):pickN([`A good result. A little more practice with ${topic} will help ${f} feel fully secure.`,`${f} did well overall; a bit more work on ${topic} will complete the picture.`,`A solid result, with ${topic} the one area to reinforce a little.`,`Good progress, and some extra practice with ${topic} will help ${f} feel fully confident.`,`${f} grasped most of this unit; ${topic} is the part to firm up.`],sd);
+ if(band>=0.4)return isUnit?pickN([`This unit was a little more challenging, and we are revisiting it in class with ${f}.`,`${f} found this unit a bit harder, so we are going over it again together.`,`A more challenging unit for ${f}; we are giving it another pass in class.`,`This one stretched ${f} a little, and we are reinforcing it in our lessons.`,`${f} met some challenge here, and we are working through it again in class.`],sd):pickN([`This unit was a little more challenging, and we are revisiting ${topic} in class with ${f}.`,`${f} found ${topic} harder here, so we are working through it again together.`,`A more challenging unit; we are giving ${topic} extra attention in class with ${f}.`,`${topic} stretched ${f} a little this time, and we are reinforcing it in our lessons.`,`This unit asked more of ${f} around ${topic}, and we are revisiting it together.`],sd);
+ return isUnit?pickN([`This unit needs more support, so we are giving ${f} extra practice. This is a normal step in the learning journey.`,`${f} needs a bit more support here, and we are building in extra practice. This is a natural part of learning.`,`We are giving ${f} additional practice on this unit, which is a normal step as English settles in.`,`This unit is still developing for ${f}, so we are adding focused practice, just as we would expect at this stage.`,`We are supporting ${f} on this unit with extra practice, a normal and healthy part of the journey.`],sd):pickN([`We are giving ${f} extra practice with ${topic}. This is a normal step in the learning journey.`,`${f} needs a little more support with ${topic}, and we are building in extra practice. This is a natural part of learning.`,`We are adding focused practice on ${topic} for ${f}, which is a normal step as English settles in.`,`${topic} is still developing for ${f}, so we are giving it extra attention, just as we would expect at this stage.`,`We are supporting ${f} with ${topic} through extra practice, a normal and healthy part of the journey.`],sd);
 }
 function parentTestsSection(cid,name,tests){const c=getClass(cid);if(!hasTests(c))return '';
  const max=testMaxFor(c);const shown=tests.filter(t=>t.score!=null||t.level);
@@ -2937,7 +2938,7 @@ function parentBelowAnalysis(cid,name,tests){
    return '';};
  const theme=detect(fbBlob)||detect(obsBlob);
  const themeIn=theme?` with ${theme}`:'';
- const themeSentence=theme?` The teacher's notes point mostly to ${theme}, which we are actively supporting.`:'';
+ const themeSentence=theme?pickN([` The teacher's notes point mostly to ${theme}, which we are actively supporting.`,` From the written feedback, ${theme} is the main area, and that is where our support is focused.`,` The detail behind the score is mostly ${theme}, and we are giving that careful attention.`],(seed>>4))||'':'';
  // trajectory across the term
  const n=scored.length;const half=Math.ceil(n/2);
  const avg=a=>a.length?a.reduce((x,t)=>x+t.score,0)/a.length:0;
@@ -2949,17 +2950,23 @@ function parentBelowAnalysis(cid,name,tests){
  if(recentLow){
    msg=pickN([
     `Recent work has been a little below ${f}'s usual level, and because the brain builds a new language in layers, this simply shows us where to focus next. With short, meaningful practice spaced over time this area will settle, and ${f} has our targeted support in class.${themeSentence} There is nothing to worry about, and we are walking this path together with you.`,
-    `Some recent scores are still below where we would like them for ${f}, and that is useful information rather than a concern, pointing us to the next step. A second language consolidates by revisiting ideas in small, spaced doses, which is exactly what we are doing in class, and a calm, encouraging routine at home helps it click into place.${themeSentence}`
+    `Some recent scores are still below where we would like them for ${f}, and that is useful information rather than a concern, pointing us to the next step. A second language consolidates by revisiting ideas in small, spaced doses, which is exactly what we are doing in class, and a calm, encouraging routine at home helps it click into place.${themeSentence}`,
+    `A few recent results sit below ${f}'s usual level. At this stage the bilingual brain is still wiring the new patterns, so what we see is a skill under construction rather than a difficulty. We are giving ${f} focused, meaningful practice to help it take hold.${themeSentence}`,
+    `${f}'s latest scores are a touch under the usual, and we read this calmly, since language grows in uneven steps rather than straight lines. We are reinforcing the trickier parts in class through repetition and real meaning, and with a gentle routine at home ${f} will steadily close the gap.${themeSentence}`
    ],seed);
  } else if(improving||lowAllEarly){
    msg=pickN([
     `In the first units ${f} was still finding a footing${themeIn}, and one or two early scores reflected that stage. Since then the growth has been genuine, and ${f}'s more recent results show the language beginning to consolidate. This is exactly how the brain acquires a second language, in gradual stages, with early effort turning into ease. We are pleased with this progress and will keep building on it together.`,
-    `Looking at ${f}'s whole path, the lower scores belong to the earlier units, when ${theme||'this new material'} was just being introduced. More recently ${f} has moved forward clearly, a sign that English is settling into long-term memory. A brain learning a new language works in layers like this, and ${f} is doing just what we hope to see at this stage.`
+    `Looking at ${f}'s whole path, the lower scores belong to the earlier units, when ${theme||'this new material'} was just being introduced. More recently ${f} has moved forward clearly, a sign that English is settling into long-term memory. A brain learning a new language works in layers like this, and ${f} is doing just what we hope to see at this stage.`,
+    `${f}'s early scores were modest${themeIn}, which is completely natural when a skill is brand new to the brain. The more recent results tell the real story: clear, steady improvement as the patterns move from effort into automaticity. This is precisely the trajectory we hope to see, and we are proud of ${f}.`,
+    `The start of term was a settling-in period for ${f}${themeIn}, and the numbers from those first units simply mark the beginning of the climb. Since then ${f} has grown noticeably, a sign the language is consolidating through practice and use. We will keep nurturing this lovely momentum.`
    ],seed);
  } else {
    msg=pickN([
     `On one assessment ${f} scored a little below the usual, and across the whole picture this reads as a single dip rather than the pattern, which is a very natural part of learning.${themeSentence} With our continued support in class, ${f} is well on track.`,
-    `One result came in below ${f}'s usual level, and looking at everything it stands out as a one-off rather than a trend, which is completely normal as the brain consolidates new language.${themeSentence} ${f}'s overall path is healthy, and we are keeping a gentle, encouraging eye on it.`
+    `One result came in below ${f}'s usual level, and looking at everything it stands out as a one-off rather than a trend, which is completely normal as the brain consolidates new language.${themeSentence} ${f}'s overall path is healthy, and we are keeping a gentle, encouraging eye on it.`,
+    `A single score dipped below ${f}'s usual level. Set against the whole term it is clearly an off day rather than a direction, the kind of natural wobble every learning brain has.${themeSentence} ${f} remains on a healthy, confident path.`,
+    `Just one result sat under ${f}'s usual mark, and the rest of the picture is reassuring. Learning a language is rarely a straight line, and a lone dip like this is nothing to read too much into.${themeSentence} We are keeping a warm, watchful eye, and ${f} is doing well.`
    ],seed);
  }
  return `<div class="flag warn" style="margin-top:8px"><span class="fi">💡</span><div>${esc(msg)}</div></div>`;}
