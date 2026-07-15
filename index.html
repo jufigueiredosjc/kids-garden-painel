@@ -2914,15 +2914,54 @@ function parentTestsSection(cid,name,tests){const c=getClass(cid);if(!hasTests(c
  }
  const rows=shown.map(t=>`<tr><td>${esc(t.u)}</td><td>${esc(t.level||'Basic')}</td><td>${t.score==null?'n/a':esc(t.score)}</td></tr>`).join('');
  return `<hr class="sep"><h3>🧪 ${esc(testName(c))}s</h3><div class="tbl-wrap"><table><tr><th>${esc(testName(c))}</th><th>Level</th><th>Score</th></tr>${rows}</table></div>${parentBelowAnalysis(cid,name,tests)}`;}
-function parentBelowAnalysis(cid,name,tests){const c=getClass(cid);const thr=testMaxFor(c)?testMaxFor(c)*0.6:6;const low=tests.filter(t=>t.score!=null&&Number(t.score)<thr);if(!low.length)return '';
- let reasons='';low.forEach(t=>{if(t.feedback&&String(t.feedback).trim())reasons+=' '+t.feedback;});
- try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs&&NEG_RE.test(r.obs))reasons+=' '+r.obs;});}catch(e){}
- const blob=reasons.toLowerCase();const f=parentFirst(cid,name);let theme='';
- if(/late|atras|arriv|miss/.test(blob))theme='arriving a little late and missing the start of some activities';
- else if(/distract|focus|atten/.test(blob))theme='a few moments of distraction during the task';
- else if(/understand|confus|instruct|didn'?t|did not/.test(blob))theme='needing the instructions explained once more before starting';
- else if(/absen/.test(blob))theme='a couple of absences that briefly interrupted the routine';
- const msg=`On one of the recent assessments, ${f} scored a little below the usual. Looking at the overall picture, this seems linked to ${theme||'a tricky moment with the material that day'}, and it is nothing to worry about. With a calm review at home and our continued support in class, ${f} will quickly get back on track, as this is a natural part of learning.`;
+/* Below-target test note for parents. Acts as a specialist in the neuroscience of second-language acquisition:
+   reads the child's WHOLE test trajectory + the teacher's written feedback + daily observations, and frames the
+   score by what it means developmentally. Early lows that later improve become a growth story, not a worry. */
+function parentBelowAnalysis(cid,name,tests){
+ const c=getClass(cid);const max=testMaxFor(c)||30;const thr=max*0.6;const f=parentFirst(cid,name);const seed=seedOf(cid,name);
+ const scored=tests.filter(t=>t.score!=null).map(t=>({u:Number(t.u)||0,score:Number(t.score),fb:String(t.feedback||'')})).sort((a,b)=>a.u-b.u);
+ const low=scored.filter(t=>t.score<thr);
+ if(!low.length)return '';
+ // read the picture, but weight what the LOW TESTS actually showed (teacher's written feedback) over general notes
+ let fbBlob='';low.forEach(t=>{if(t.fb.trim())fbBlob+=' '+t.fb;});
+ let obsBlob='';try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs&&NEG_RE.test(r.obs))obsBlob+=' '+r.obs;});}catch(e){}
+ const detect=txt=>{const b=(' '+txt+' ').toLowerCase();
+   if(/read|text|comprehen|answer.*question/.test(b))return 'reading and understanding the texts';
+   if(/writ|spell|letter|mirror/.test(b))return 'written accuracy';
+   if(/grammar|tense|structure|sentence|adjective|comparativ|verb\b/.test(b))return 'sentence structures and tenses';
+   if(/vocab|word|crayon|name of/.test(b))return 'the newer vocabulary';
+   if(/listen/.test(b))return 'the listening sections';
+   if(/understand|confus|instruct|didn'?t|did not/.test(b))return 'taking in the instructions the first time';
+   if(/late|arriv|absen|miss/.test(b))return 'some missed or interrupted classes';
+   if(/distract|focus|atten/.test(b))return 'holding focus through a longer task';
+   return '';};
+ const theme=detect(fbBlob)||detect(obsBlob);
+ const themeIn=theme?` with ${theme}`:'';
+ const themeSentence=theme?` The teacher's notes point mostly to ${theme}, which we are actively supporting.`:'';
+ // trajectory across the term
+ const n=scored.length;const half=Math.ceil(n/2);
+ const avg=a=>a.length?a.reduce((x,t)=>x+t.score,0)/a.length:0;
+ const early=avg(scored.slice(0,half)),recent=avg(scored.slice(half));
+ const recentLow=scored[n-1].score<thr;
+ const lowAllEarly=low.every(t=>scored.indexOf(t)<half);
+ const improving=n>=2&&(recent-early)>=max*0.1;
+ let msg='';
+ if(recentLow){
+   msg=pickN([
+    `Recent work has been a little below ${f}'s usual level, and because the brain builds a new language in layers, this simply shows us where to focus next. With short, meaningful practice spaced over time this area will settle, and ${f} has our targeted support in class.${themeSentence} There is nothing to worry about, and we are walking this path together with you.`,
+    `Some recent scores are still below where we would like them for ${f}, and that is useful information rather than a concern, pointing us to the next step. A second language consolidates by revisiting ideas in small, spaced doses, which is exactly what we are doing in class, and a calm, encouraging routine at home helps it click into place.${themeSentence}`
+   ],seed);
+ } else if(improving||lowAllEarly){
+   msg=pickN([
+    `In the first units ${f} was still finding a footing${themeIn}, and one or two early scores reflected that stage. Since then the growth has been genuine, and ${f}'s more recent results show the language beginning to consolidate. This is exactly how the brain acquires a second language, in gradual stages, with early effort turning into ease. We are pleased with this progress and will keep building on it together.`,
+    `Looking at ${f}'s whole path, the lower scores belong to the earlier units, when ${theme||'this new material'} was just being introduced. More recently ${f} has moved forward clearly, a sign that English is settling into long-term memory. A brain learning a new language works in layers like this, and ${f} is doing just what we hope to see at this stage.`
+   ],seed);
+ } else {
+   msg=pickN([
+    `On one assessment ${f} scored a little below the usual, and across the whole picture this reads as a single dip rather than the pattern, which is a very natural part of learning.${themeSentence} With our continued support in class, ${f} is well on track.`,
+    `One result came in below ${f}'s usual level, and looking at everything it stands out as a one-off rather than a trend, which is completely normal as the brain consolidates new language.${themeSentence} ${f}'s overall path is healthy, and we are keeping a gentle, encouraging eye on it.`
+   ],seed);
+ }
  return `<div class="flag warn" style="margin-top:8px"><span class="fi">💡</span><div>${esc(msg)}</div></div>`;}
 function parentHighlights(cid,name){const f=parentFirst(cid,name);const st=studentStats(cid,name);const prof=strongSkills(cid,name);
  let obs='';try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}const blob=obs.toLowerCase();const B=[];
