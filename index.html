@@ -2970,7 +2970,41 @@ function parentBelowAnalysis(cid,name,tests){
    ],seed);
  }
  return `<div class="flag warn" style="margin-top:8px"><span class="fi">💡</span><div>${esc(msg)}</div></div>`;}
-function parentHighlights(cid,name){const f=parentFirst(cid,name);const st=studentStats(cid,name);const prof=strongSkills(cid,name);
+/* Parent Highlights for K2-TeensB2: built from the child's OWN positive record (the same observations coordination
+   sees), transformed into warm, dateless positive points, ranked by how often each strength truly appears and varied
+   by seed so no two children read the same. Reading only, no history is ever modified. Placeholders: %F% name. */
+const PARENT_HL=[
+ ['speaking',/spoke|speaking|\bsaid\b|full sentence|orally|out loud|conversation|dialogue|talk(ed|ing)|answered aloud|express(ed|es|ing)?/,[`%F% is speaking English with growing confidence, forming fuller sentences and sharing ideas aloud.`,`%F% increasingly reaches for English to speak, and that oral confidence is really showing.`,`%F% is finding a genuine voice in English, speaking up and putting thoughts into words.`]],
+ ['vocabulary',/vocab|new word|word bank|remember(ed|s)?.{0,12}word|used the word|rich vocab|wide range of word/,[`%F% is picking up and using new vocabulary naturally in class.`,`%F% remembers and reuses newly learned words, a sign the vocabulary is settling in.`,`%F%'s vocabulary keeps widening, and %F% enjoys putting new words to use.`]],
+ ['reading',/read(s|ing)?\b|decod|\btext\b|story|book|passage/,[`%F% is reading in English with more independence and understanding.`,`%F% engages well with texts and stories, following the meaning with growing ease.`,`%F%'s reading is coming along nicely, with more confidence tackling new texts.`]],
+ ['writing',/wrote|writing|written|paragraph|handwriting|spell(ed|ing).{0,10}(correct|well)|good spelling/,[`%F% is writing in English with more accuracy and structure.`,`%F% puts ideas onto paper with growing clarity and control.`,`%F%'s written work shows careful, steady progress.`]],
+ ['grammar',/grammar|tense|past simple|present perfect|comparative|sentence structure/,[`%F% is handling English structures and tenses with growing accuracy.`,`%F% is applying grammar more confidently, building well-formed sentences.`,`%F% shows a good sense of how English fits together.`]],
+ ['participation',/participat|engag|volunteer|raised.{0,6}hand|answered|contribut|active|took part|joins? in/,[`%F% takes part actively and contributes naturally in English.`,`%F% is an eager participant, offering answers and joining in with energy.`,`%F% engages fully in class, always ready to contribute.`]],
+ ['enthusiasm',/enthusias|loved|enjoy|excited|eager|motivat|keen|delight/,[`%F% brings real enthusiasm to learning English.`,`%F% clearly enjoys class, and that joy fuels the learning.`,`%F% approaches English with eagerness and a happy, motivated spirit.`]],
+ ['creativity',/creativ|imagin|project|\bmade\b|built|craft|drew|design|invent/,[`%F% brings creativity and imagination to class projects.`,`%F% shines in hands-on, creative tasks, offering original ideas.`,`%F% loves to create, and the projects show real thought and imagination.`]],
+ ['collaboration',/help(ed|s|ful)?|\bkind\b|friend|share|caring|team|cooperat|polite|encourag(ed|es|ing)/,[`%F% is caring and collaborative, a positive presence in the group.`,`%F% works beautifully with classmates, kind and ready to help.`,`%F% lifts the group with a warm, cooperative spirit.`]],
+ ['leadership',/leader|\bled\b|guided|initiativ|took charge|role model/,[`%F% shows natural leadership, guiding and encouraging classmates.`,`%F% often takes initiative and sets a positive example.`,`%F% steps up with quiet leadership in group work.`]],
+ ['focus',/focus|concentrat|attentive|on task|persever|finished|completed|diligent|\beffort\b/,[`%F% concentrates well and sees tasks through to the end.`,`%F% shows lovely focus and perseverance in class.`,`%F% stays on task and puts in genuine, steady effort.`]],
+ ['confidence',/confiden|\bbrave\b|independent|self-assured|willing to try/,[`%F% is growing in confidence, willing to try and take part.`,`%F% tackles new challenges with increasing self-assurance.`,`%F% steps forward bravely, a lovely sign of growing confidence.`]],
+ ['listening',/listen|understood|follow(ed|s).{0,6}instruction|comprehen/,[`%F% listens attentively and follows English with real understanding.`,`%F%'s listening comprehension is strong and steadily improving.`,`%F% picks up spoken English well, following along with ease.`]],
+ ['improvement',/improv|progress|better|growth|develop(ed|ing)|advanced|came a long way/,[`%F% has made clear, visible progress this term.`,`%F% keeps moving forward, and the growth is genuinely evident.`,`%F%'s development this term has been a joy to see.`]]
+];
+function parentHighlightsRich(cid,name){
+ const f=parentFirst(cid,name);const seed=seedOf(cid,name);const st=studentStats(cid,name);const prof=strongSkills(cid,name);
+ let blob='';
+ try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs&&POS_RE.test(r.obs)&&!NEG_RE.test(r.obs))blob+=' '+r.obs;});}catch(e){}
+ try{coordNotesOf(cid,name).forEach(o=>{const tx=o&&o.text;if(tx&&POS_RE.test(tx)&&!NEG_RE.test(tx))blob+=' '+tx;});}catch(e){}
+ const b=(' '+blob+' ').toLowerCase();
+ const hits=[];PARENT_HL.forEach(t=>{const m=b.match(new RegExp(t[1].source,'g'));if(m)hits.push({k:t[0],n:m.length,v:t[2]});});
+ hits.sort((a,b2)=>b2.n-a.n);
+ const B=[];
+ if(prof.length)B.push(pickN([`%F% communicates in English with real confidence in %S%.`,`%F%'s %S% %ARE% a genuine strength right now.`,`In English, %F% is especially secure with %S%.`],seed).replace(/%S%/g,andList(prof.slice(0,3))).replace(/%ARE%/g,prof.length>1?'are':'is'));
+ hits.slice(0,4).forEach(h=>{B.push(pickN(h.v,seedOf(cid,name+'#'+h.k)));});
+ if(st.attRate!=null&&st.attRate>=90)B.push(pickN([`A consistent presence in class gives %F% the steady contact with English that helps most.`,`%F%'s faithful attendance has built a strong, healthy learning routine.`],(seed>>9)));
+ if(!B.length)B.push(pickN([`%F% brings a positive, curious attitude that supports steady progress in English.`,`%F% engages warmly with English and is building a genuine connection with the language.`],seed));
+ return `<ul style="margin:0 0 0 18px">${B.slice(0,5).map(x=>`<li>${esc(x.replace(/%F%/g,f))}</li>`).join('')}</ul>`;
+}
+function parentHighlights(cid,name){const c=getClass(cid);if(c&&['K2','K3','K4','K5','K6','TeensB1','TeensB2'].indexOf(c.level)>=0)return parentHighlightsRich(cid,name);const f=parentFirst(cid,name);const st=studentStats(cid,name);const prof=strongSkills(cid,name);
  let obs='';try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}const blob=obs.toLowerCase();const B=[];
  if(prof.length)B.push(`${f} communicates in English with real confidence in ${prof.slice(0,3).join(', ')}.`);
  if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(blob))B.push(`${f} takes part actively and with genuine enthusiasm, contributing naturally in English.`);
