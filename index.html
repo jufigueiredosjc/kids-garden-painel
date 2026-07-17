@@ -628,7 +628,7 @@ function trackItems(c){
 function trackName(c){return c.track==="phonics"?"Phonics group":c.track==="nursery"?"Theme":c.track==="lessons"?"Lesson":"Unit";}
 function testName(c){return c.mock?"Mock Test":"Unit Test";}
 /* These classes score unit tests out of 10; target met = 80% (>=8). Only these levels. */
-function testMaxFor(c){return (c&&(c.level==='K1'||c.level==='K6'||c.level==='TeensB1'))?10:(c&&(c.level==='K2'||c.level==='K3'||c.level==='K4'||c.level==='K5'))?30:null;}
+function testMaxFor(c){return (c&&(c.level==='K1'||c.level==='K6'||c.level==='TeensB1'))?10:(c&&(c.level==='K2'||c.level==='K3'||c.level==='K4'||c.level==='K5'||c.level==='TeensB2'))?30:null;}
 /* Test result tier, proportional to this class's maximum (10 for K1/K6/TeensB1, 30 for K2-K5). 2=solid, 1=developing, 0=below. */
 function testTier(score,c){const m=testMaxFor(c)||30;const r=Number(score)/m;return r>=0.73?2:(r>=0.5?1:0);}
 function testTheme(fb){fb=String(fb||'').toLowerCase();
@@ -3071,7 +3071,7 @@ function parentDevAttendance(cid,name,seed){const st=studentStats(cid,name);cons
  if(st.attRate!=null&&st.attRate>=90)return pickN([`${f}'s consistent presence in class gives the regular contact with English that helps most.`,`${f} attends so faithfully, and that steady rhythm is one of the quiet secrets behind this progress.`,`The constancy of ${f}'s attendance is a real gift to the learning, giving English the regular practice it thrives on.`],seed);
  return '';}
 /* CEFR framing: K6 = Cambridge Flyers (A2), TeensB1 = B1 Preliminary (B1). Reuses CAMB_INFO descriptors. */
-function cefrForLevel(level){if(typeof CAMB_INFO==='undefined')return null;if(level==='K6')return {exam:'Cambridge Flyers',cefr:'A2',info:CAMB_INFO.Flyers};if(level==='TeensB1')return {exam:'B1 Preliminary',cefr:'B1',info:CAMB_INFO.B1};return null;}
+function cefrForLevel(level){if(typeof CAMB_INFO==='undefined')return null;if(level==='K6')return {exam:'Cambridge Flyers',cefr:'A2',info:CAMB_INFO.Flyers};if(level==='TeensB1')return {exam:'B1 Preliminary',cefr:'B1',info:CAMB_INFO.B1};if(level==='TeensB2')return {exam:'B2 First',cefr:'B2',info:null};return null;}
 /* Parent-facing CEFR paragraph — only for K6/TeensB1, woven with the child's own strengths and next steps. */
 function parentCefrNote(cid,name){const c=getClass(cid);const cf=cefrForLevel(c.level);if(!cf)return '';const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const seed=seedOf(cid,name);
  let s=pickN([`At this stage, ${f} is working at ${cf.exam} level, which corresponds to ${cf.cefr} on the Common European Framework (CEFR). The aim now is to use English with growing independence across listening, reading, writing and speaking. `,`${f} is studying at ${cf.exam} level, equivalent to ${cf.cefr} on the European framework (CEFR), where English becomes a real, practical tool across the four skills. `],seed);
@@ -3084,7 +3084,45 @@ function parentDevHomework(cid,name,seed){const c=getClass(cid);if(!cefrForLevel
  if(st.hwRate<50)return pickN([`Homework has been arriving less often lately, and a short, steady practice at home would give ${f}'s progress a real boost. We are glad to suggest simple, enjoyable ways to build the habit.`,`A little more regular practice at home would help ${f} consolidate what we do in class. Even ten focused minutes makes a difference, and we can share easy ideas to fit it into the routine.`],seed);
  if(st.hwRate>=90)return pickN([`${f}'s consistent homework shows a strong study habit that is really paying off.`,`The care ${f} puts into completing homework is clearly supporting this steady progress.`],seed);
  return '';}
+/* B2-specific parent skills comment (below the skills table): interprets the assessed skills against B2 can-do,
+   individual to each student. Green box to distinguish it from the blue CEFR note. Read-only. */
+/* Reads each B2 student's OWN record to find their spotlight skill (from positive observations) and their focus
+   skill (from the feedback on any below-target tests). Individual even when the formal skill ratings are uniform. */
+function b2SkillSignal(cid,name){
+ const SK=[['Speaking',/spoke|speaking|\bsaid\b|orally|out loud|conversation|dialogue|talk|express|fluen|pronunc|oral|debate/],['Reading',/read|text|story|book|passage|article/],['Writing',/wrote|writing|written|essay|paragraph|composition|review|spelling|punctuation/],['Listening',/listen|heard|audio|dictation/],['Use of English',/grammar|tense|vocab|word|structure|use of english|collocation|phrasal|preposition/]];
+ const top=txt=>{const b=(' '+txt+' ').toLowerCase();const a=SK.map(x=>{const m=b.match(new RegExp(x[1].source,'g'));return {k:x[0],n:m?m.length:0};}).sort((p,q)=>q.n-p.n);return a[0].n>0?a[0].k:'';};
+ let pos='';try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs&&POS_RE.test(r.obs)&&!NEG_RE.test(r.obs))pos+=' '+r.obs;});}catch(e){}
+ let low='';try{const c=getClass(cid);const max=testMaxFor(c)||30;const t=STATE.tests[cid]||{};Object.values(t).forEach(rows=>{const r=rows.find(x=>x.student===name);if(r&&r.score!=null&&Number(r.score)<max*0.6&&r.feedback)low+=' '+r.feedback;});}catch(e){}
+ return {strong:top(pos),focus:top(low)};}
+function parentB2SkillsComment(cid,name){const f=parentFirst(cid,name);const seed=seedOf(cid,name);const prof=strongSkills(cid,name);const sig=b2SkillSignal(cid,name);
+ const strong=sig.strong||prof[0]||'';const focus=(sig.focus&&sig.focus!==strong)?sig.focus:'';
+ if(!strong&&!prof.length)return '';
+ const cando={Listening:'following natural, connected speech and longer talks',Reading:'reading longer, authentic texts for detail and opinion',Writing:'producing clear, well-structured writing such as essays and reviews',Speaking:'speaking at length and giving reasoned opinions',"Use of English":'handling more complex grammar and vocabulary with accuracy'};
+ let s=pickN([`These skills are read against what B2 asks for in real, practical use. `,`At B2, each skill is judged by how independently ${f} can use it. `,`We weigh each skill against B2 can-do expectations, alongside ${f}'s work all term. `],seed);
+ if(strong){s+=pickN([`From ${f}'s work this term, ${strong} stands out as a real strength`,`${f} shows particular confidence in ${strong}`,`Across the term, ${strong} is where ${f} is strongest`],(seed>>3));const cd=cando[strong];s+=(cd?`, ${cd}`:'')+'. ';}
+ else s+=`${f} is performing at B2 across the assessed skills. `;
+ if(focus){s+=pickN([`The skill we are helping ${f} push furthest towards full B2 is ${focus}`,`${f}'s clearest next step for solid B2 is ${focus}`,`Right now we are developing ${focus} most closely with ${f}`],(seed>>6));const cd=cando[focus];s+=(cd?`, especially ${cd}`:'')+'. ';}
+ else s+=pickN([`Overall ${f} is progressing evenly across the B2 skill set. `,`${f} is moving steadily across all the B2 skills. `],(seed>>8));
+ return `<div style="background:#EAF6EE;border:1px solid #1B7A3A;border-radius:10px;padding:10px 12px;margin-top:10px;line-height:1.6">🎯 ${esc(s.trim())}</div>`;}
+/* B2 development note: a specialist reading an adolescent's whole record (classes + tests + observations) at B2,
+   with concrete, age-appropriate levers (home tasks, Cambridge One, punctuality, real English input). Individual. */
+function parentDevNoteB2(cid,name){const f=parentFirst(cid,name);const seed=seedOf(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const st=studentStats(cid,name);const tr=childPositiveTraits(cid,name);
+ const den=(st.p||0)+(st.a||0)+(st.l||0);const lateRate=den?st.l/den:0;
+ let s=pickN([`As ${f} moves through B2, we read the whole picture together, the class work, the assessments and the daily observations, as we would for a young person building genuinely independent English. `,`At B2, ${f} is less learning English than using it, and our reading of the term takes in everything: lessons, tests and how ${f} works day to day. `,`Looking across the whole term, ${f} is developing the confident, flexible English that B2 is all about. `],seed);
+ if(tr.length)s+=pickN([`We especially notice ${tr[0].phrase}. `,`A real asset is ${tr[0].phrase}. `],(seed>>3));
+ else if(prof.length)s+=`${f} shows genuine strength in ${andList(prof.slice(0,2))}. `;
+ if(dev.length)s+=pickN([`To keep climbing towards full B2 command, the priority is ${andList(dev.slice(0,2))}. `,`The clearest next step is to strengthen ${andList(dev.slice(0,2))}. `],(seed>>5));
+ const levers=[];
+ if(st.hwRate!=null&&st.hwRate<75)levers.push(`completing the tasks we send home, where a great deal of B2 consolidation happens`);
+ levers.push(pickN([`making regular use of Cambridge One, our online practice platform`,`keeping a steady routine on Cambridge One`],(seed>>7)));
+ if(lateRate>=0.15)levers.push(`arriving on time so no part of the lesson is missed`);
+ levers.push(pickN([`bringing English into daily life through series, films, music, articles and podcasts`,`spending time with real English content, from shows and songs to news and podcasts`],(seed>>9)));
+ const chosen=levers.slice(0,3);
+ s+=pickN([`At this age the biggest gains come from independent habits, so we especially encourage ${andList(chosen)}. `,`For an adolescent at B2, autonomy makes the difference, and we warmly encourage ${andList(chosen)}. `],(seed>>11));
+ s+=pickN([`With these habits and ${f}'s own commitment, ${f} will keep growing into a truly independent user of English, and we are glad to support that with you. `,`Small, consistent steps like these will carry ${f} steadily towards mastery, and we are proud to walk this path with your family. `],(seed>>13));
+ return s.trim();}
 function parentDevNoteAuto(cid,name){
+ if((getClass(cid)||{}).level==='TeensB2')return parentDevNoteB2(cid,name);
  const c=getClass(cid);const f=parentFirst(cid,name);const prof=strongSkills(cid,name);const dev=weakSkills(cid,name);const st=studentStats(cid,name);
  const young=["Nursery","Kinder","KinderPlus","K1"].includes(c.level);const seed=seedOf(cid,name);
  let s=pickN([`At Kids Garden, ${f} learns English the way the brain learns best, through meaningful, hands-on experiences rather than memorisation. `,`Here at Kids Garden, English reaches ${f} through play, stories and real meaning, which is how a child's brain takes in a language. `,`${f} is learning English in a natural way, through games, songs and projects rather than memorising it. `,`Week by week, ${f} meets English as something to use and explore, and that is how the brain makes a new language its own. `],seed);
@@ -3253,7 +3291,7 @@ function parentReportCard(cid,name,sel){const inc=k=>!sel||sel[k]!==false;
  let S='';
  if(inc('howDoing'))S+=`<hr class="sep"><h3>🌟 How ${f} is doing</h3><div class="narr"><ul style="margin:0 0 0 18px">${parentOverviewBullets(cid,name).map(x=>`<li style="margin-bottom:5px">${x}</li>`).join('')}</ul></div>${parentCefrNote(cid,name)}`;
  if(inc('attendance'))S+=`<hr class="sep"><h3>📊 Attendance & engagement</h3><div class="stat-grid" style="margin-bottom:8px"><div class="stat blue"><div class="n">${st.attRate==null?'—':st.attRate+'%'}</div><div class="l">Attendance</div></div><div class="stat"><div class="n">${st.seen}</div><div class="l">Classes recorded</div></div></div>`;
- if(inc('skills'))S+=`<hr class="sep"><h3>🎯 Skills development</h3>${reportSkillsHtml(cid,name,'parent')}${c.track==='phonics'?`<hr class="sep"><h3>🔡 Jolly Phonics</h3><div class="narr">${esc(parentPhonics(cid,name))}</div>`:''}`;
+ if(inc('skills'))S+=`<hr class="sep"><h3>🎯 Skills development</h3>${reportSkillsHtml(cid,name,'parent')}${c.level==='TeensB2'?parentB2SkillsComment(cid,name):''}${c.track==='phonics'?`<hr class="sep"><h3>🔡 Jolly Phonics</h3><div class="narr">${esc(parentPhonics(cid,name))}</div>`:''}`;
  if(inc('tests')&&hasTests(c))S+=parentTestsSection(cid,name,tests);
  if(inc('highlights'))S+=`<hr class="sep"><h3>⭐ Highlights</h3>${parentHighlights(cid,name)}`;
  if(inc('extra'))S+=parentExtraActivities(cid,name);
