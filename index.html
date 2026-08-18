@@ -948,7 +948,7 @@ function renderClass(id){
  if(hasTests(c))tabs.push(['tests',(c.mock?'🧪 Mock Tests':'🧪 Unit Tests')]);
  tabs.push(['history','📖 Edit Reports']);
  if(attnResolvedList(id).length)tabs.push(['attnresolved','🚦 Resolved']);
- if(trialsForClass(id).length)tabs.push(['trial','🎒 Trial Class']);
+ if(trialsForClass(id).length)tabs.push(['trial',trialNotePending(id).length?'🎒 Trial Class ⚠️':'🎒 Trial Class']);
  if(!tabs.some(t=>t[0]===CLASS_TAB))CLASS_TAB='overview';
  app().innerHTML=`
   <div class="page-head"><button class="back" onclick="go('home')">← Classes</button>
@@ -958,6 +958,7 @@ function renderClass(id){
   ${classMsgBanner(id)}
   ${classTaskBanner(id)}
   ${classTrialBanner(id)}
+  ${classTrialNoteReminder(id)}
   <div id="tabbody"></div>`;
  const b=$("#tabbody");
  if(CLASS_TAB==='overview')b.innerHTML=tabOverview(id);
@@ -971,6 +972,7 @@ function renderClass(id){
  if(od.tracked&&od.overdue&&ALERTED!==id){ALERTED=id;setTimeout(()=>showOverdueModal(c,od),120);}
  if(!(od.tracked&&od.overdue)&&LAST_CLASS_ENTERED!==id&&pendingCountForClass(id)>0){setTimeout(()=>showTaskPopup(id),220);}
  if(trialsForClass(id).some(m=>m.status==='assigned'&&!TRIAL_POPPED.has(m.id))){setTimeout(()=>showTrialTeacherAlert(id),320);}
+ else if(trialNotePending(id).length){setTimeout(()=>showTrialNoteReminder(id),320);}
  LAST_CLASS_ENTERED=id;
 }
 function setTab(t,id){if(REPORT_DIRTY){leaveGuard(function(){setTab(t,id);});return;}CLASS_TAB=t;CUR_PERIOD=0;EDIT_IDX=null;renderClass(id);}
@@ -1987,7 +1989,7 @@ async function crmExport(){
    Read-only on every child history; trial data lives in its own isolated STATE.trials. ===== */
 const CRM_TRIALS_URL="https://script.google.com/macros/s/AKfycbxr1ocQ2zn_sJwKk4PHOZ1MYTwaTeuVpNkwBJTm9D7lDcyV7mFVkaifCk6ksLS-mqo/exec";
 const TRANS_CACHE={};
-let TRIALS_LOADED=false,TRIALS_LOADING=false,TRIAL_DISMISSED=new Set(),TRIAL_POPPED=new Set();
+let TRIALS_LOADED=false,TRIALS_LOADING=false,TRIAL_DISMISSED=new Set(),TRIAL_POPPED=new Set(),TRIAL_NOTE_POPPED=new Set();
 function gTranslate(text){text=String(text||'').trim();if(!text)return Promise.resolve('');if(TRANS_CACHE[text]!==undefined)return Promise.resolve(TRANS_CACHE[text]);
  return fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=pt&tl=en&dt=t&q='+encodeURIComponent(text)).then(r=>r.json()).then(j=>{let o='';try{(j[0]||[]).forEach(s=>{if(s&&s[0])o+=s[0];});}catch(e){}o=o||text;TRANS_CACHE[text]=o;return o;}).catch(()=>text);}
 function ensureTrials(){STATE.trials=STATE.trials||{};return STATE.trials;}
@@ -2167,6 +2169,32 @@ function trialAck(mid,cid){const m=trialById(mid);if(!m)return;m.status='ack';m.
 function trialTeacherComment(mid,cid){const m=trialById(mid);if(!m)return;const el=$('#trtc_'+mid);const v=el?String(el.value).trim():'';m.teacherComment_src=v;
  const fin=()=>{save();toast('💾 Note saved');renderClass(cid);};
  if(v){gTranslate(v).then(en=>{m.teacherComment_en=en;m.teacherComment=v;fin();});}else{m.teacherComment=v;m.teacherComment_en='';fin();}
+}
+/* ---- Teacher reminder: keep nudging the teacher to write the trial-day note until it is filled in.
+   Pure UI, read-only: it only reads the trial data already loaded and never writes/alters any history.
+   Shows from the trial day onwards (so it doesn't nag before the class), and disappears the moment the
+   note is saved or coordination closes the cycle (trialsForClass excludes 'done'). ===== */
+function trialDayReached(m){const s=m.snap||{};if(!s.data)return true;const d=new Date(s.data);if(isNaN(d))return true;
+ const now=new Date();const dd=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());const nn=Date.UTC(now.getFullYear(),now.getMonth(),now.getDate());return dd<=nn;}
+function trialNoteMissing(m){return !(m.teacherComment&&String(m.teacherComment).trim());}
+function trialNotePending(id){return trialsForClass(id).filter(m=>trialDayReached(m)&&trialNoteMissing(m));}
+function classTrialNoteReminder(id){const list=trialNotePending(id);if(!list.length)return '';
+ return list.map(m=>{const s=m.snap||{};return `<div class="card" style="border-color:#E67E22;background:linear-gradient(120deg,#FFF3E6,#FFFBF6)">
+   <h3 style="color:#B9560E">📝 Trial note still pending — please fill it in</h3>
+   <p><b>${esc(trialChild(s))}</b> · ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))}</p>
+   <p class="small">Coordination is waiting for your note on how this trial went to follow up with the family. This reminder stays here until you save your note.</p>
+   <div class="no-print"><button class="btn" style="background:#E67E22;border-color:#E67E22" onclick="setTab('trial','${id}')">📝 Write my note now</button></div></div>`;}).join('');
+}
+function showTrialNoteReminder(id){const list=trialNotePending(id).filter(m=>!TRIAL_NOTE_POPPED.has(m.id));if(!list.length)return;list.forEach(m=>TRIAL_NOTE_POPPED.add(m.id));
+ const m=list[0],s=m.snap||{};const more=list.length>1?` <span class="muted small">(+${list.length-1} more)</span>`:'';
+ const ex=document.getElementById('trialnotepop');if(ex)ex.remove();
+ const w=document.createElement('div');w.id='trialnotepop';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML=`<div class="od-box" style="border-color:#E67E22"><div class="od-ico">📝</div><h2 style="color:#B9560E">Trial note pending${more}</h2>
+  <p><b>${esc(trialChild(s))}</b> · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))}</p>
+  <p class="od-sub">Please write your note on how the trial went so coordination can follow up with the family. You'll keep seeing this reminder until it's filled in.</p>
+  <div style="margin-top:8px"><button class="btn" style="background:#E67E22;border-color:#E67E22" onclick="var x=document.getElementById('trialnotepop');if(x)x.remove();setTab('trial','${id}');">📝 Write my note now</button>
+  <button class="btn ghost" onclick="var x=document.getElementById('trialnotepop');if(x)x.remove();">Later</button></div></div>`;
+ document.body.appendChild(w);
 }
 /* ===== Coordination: Skills & Competencies — manage PROJECTS per level (extra group).
    Units/phonics/pre-set competencies are NEVER changed here; this only adds level projects.
