@@ -2070,15 +2070,15 @@ function trialStatusLabel(st){return {new:'New',assigned:'Sent to teacher',ack:'
 function printTrials(){
  const rows=trialReportRows();
  const tr=rows.map(m=>{const s=m.snap||{};const c=m.classId?getClass(m.classId):null;
-  return `<tr><td>${esc(trialChild(s))}</td><td>${esc(trialAge(s))}</td><td>${esc(trialDate(s))}</td><td>${esc(trialTime(s))}</td><td>${esc(c?c.name+' · '+c.time+' ('+c.teacher+')':'—')}</td><td>${esc(trialStatusLabel(m.status))}</td><td>${esc(s.comentario||'')}</td><td>${esc(m.coordNote||'')}</td><td>${esc(m.teacherComment_en||m.teacherComment||'')}</td><td>${esc(m.observation||'')}</td></tr>`;}).join('');
- const html=`<html><head><title>Trial Classes Report</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;color:#042342;padding:24px}h1{color:#800080;margin:0 0 4px}table{border-collapse:collapse;width:100%;font-size:12px;margin-top:12px}th,td{border:1px solid #ccc;padding:6px;text-align:left;vertical-align:top}th{background:#F6EEFB}</style></head><body><h1>🎒 Trial Classes Report</h1><div>Kids Garden · ${rows.length} trial class(es)</div><table><tr><th>Child</th><th>Age</th><th>Date</th><th>Time</th><th>Class (teacher)</th><th>Status</th><th>Office comment</th><th>Coordination notes</th><th>Teacher's note</th><th>Observation</th></tr>${tr}</table></body></html>`;
+  return `<tr><td>${esc(trialChild(s))}</td><td>${esc(trialAge(s))}</td><td>${esc(trialDate(s))}</td><td>${esc(trialTime(s))}</td><td>${esc(c?c.name+' · '+c.time+' ('+c.teacher+')':'—')}</td><td>${esc(trialStatusLabel(m.status))}</td><td>${esc(s.comentario||'')}</td><td>${esc(m.coordNote||'')}</td><td>${esc(trialReportText(m))}</td><td>${esc(m.observation||'')}</td></tr>`;}).join('');
+ const html=`<html><head><title>Trial Classes Report</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;color:#042342;padding:24px}h1{color:#800080;margin:0 0 4px}table{border-collapse:collapse;width:100%;font-size:12px;margin-top:12px}th,td{border:1px solid #ccc;padding:6px;text-align:left;vertical-align:top}th{background:#F6EEFB}</style></head><body><h1>🎒 Trial Classes Report</h1><div>Kids Garden · ${rows.length} trial class(es)</div><table><tr><th>Child</th><th>Age</th><th>Date</th><th>Time</th><th>Class (teacher)</th><th>Status</th><th>Office comment</th><th>Coordination notes</th><th>Teacher's report</th><th>Observation</th></tr>${tr}</table></body></html>`;
  const w=window.open('','_blank');if(!w){toast('Please allow pop-ups to print');return;}w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){}},350);
 }
 function downloadTrials(){
  const rows=trialReportRows();const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
- const head=['Child','Age','Date','Time','Class','Teacher','Status','Office comment','Coordination notes','Teacher note','Observation'];
+ const head=['Child','Age','Date','Time','Class','Teacher','Status','Office comment','Coordination notes','Teacher report','Observation'];
  const lines=[head.map(q).join(',')];
- rows.forEach(m=>{const s=m.snap||{};const c=m.classId?getClass(m.classId):null;lines.push([trialChild(s),trialAge(s),trialDate(s),trialTime(s),c?c.name+' '+c.time:'',c?c.teacher:'',trialStatusLabel(m.status),s.comentario||'',m.coordNote||'',m.teacherComment_en||m.teacherComment||'',m.observation||''].map(q).join(','));});
+ rows.forEach(m=>{const s=m.snap||{};const c=m.classId?getClass(m.classId):null;lines.push([trialChild(s),trialAge(s),trialDate(s),trialTime(s),c?c.name+' '+c.time:'',c?c.teacher:'',trialStatusLabel(m.status),s.comentario||'',m.coordNote||'',trialReportText(m),m.observation||''].map(q).join(','));});
  const csv='﻿'+lines.join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);
  const a=document.createElement('a');a.href=url;a.download='trial-classes.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('⬇️ Report downloaded');
 }
@@ -2125,7 +2125,8 @@ function trialCoordCard(m){const s=m.snap||{};const id=m.id;const assigned=m.cla
 }
 function trialCoordFollow(m){let h='';
  if(m.status==='ack')h+=`<div class="flag ok" style="margin-top:8px"><span class="fi">✅</span><div>Teacher confirmed: <b>Understood, preparing for the trial</b>.</div></div>`;
- if(m.teacherComment)h+=`<div class="flag warn" style="margin-top:8px"><span class="fi">🗒️</span><div><b>Teacher's note on the trial day:</b> ${esc(m.teacherComment_en||m.teacherComment)}</div></div>`;
+ const _pairs=trialReportPairs(m);
+ if(_pairs.length||m.teacherComment)h+=`<div class="flag warn" style="margin-top:8px"><span class="fi">🗒️</span><div><b>Teacher's report on the child:</b>${_pairs.map(p=>`<div class="small">• <b>${esc(p[0])}:</b> ${esc(p[1])}</div>`).join('')}${m.teacherComment?`<div class="small" style="margin-top:4px"><b>Note:</b> ${esc(m.teacherComment_en||m.teacherComment)}</div>`:''}</div></div>`;
  if(m.observation)h+=`<div class="small" style="margin-top:6px">📝 <b>Observation:</b> ${esc(m.observation)}</div>`;
  if(m.tasks&&m.tasks.length)h+=`<div class="small" style="margin-top:6px">📌 <b>Tasks:</b> ${m.tasks.map(esc).join(' · ')}</div>`;
  return h;
@@ -2153,6 +2154,16 @@ function classTrialBanner(id){const trials=trialsForClass(id).filter(m=>m.status
    <button class="btn ghost" onclick="setTab('trial','${id}')">Open Trial Class</button></div></div>`;}).join('');
 }
 function trialDismissBanner(mid,cid){TRIAL_DISMISSED.add(mid);renderClass(cid);}
+/* Structured trial report — the teacher's view of the trial child. Stored on the trial wrapper (m.report /
+   m.highlight / m.teacherComment), NEVER on m.snap (the CRM lead), so no lead data is ever touched. */
+const TRIAL_REPORT_FIELDS=[
+ {k:'engagement',label:'Engagement & participation',opts:['Very engaged and enthusiastic','Engaged and comfortable','Shy at first, then warmed up','Reserved — needed gentle support','Hard to engage today']},
+ {k:'english',label:'Response to English',opts:['Understood and tried to use English','Understood with gestures & visuals','Very new to English — followed along','Found it hard to follow today']},
+ {k:'comfort',label:'Comfort & social',opts:['Settled easily and mixed with peers','Took a little time, then settled','Stayed close to the teacher','Found the group or separation hard']},
+ {k:'fit',label:'Fit for this group',opts:['Great fit for this class','Good fit','Might suit another level better','Worth a chat with coordination']}
+];
+function trialReportPairs(m){const r=(m&&m.report)||{};const out=[];TRIAL_REPORT_FIELDS.forEach(f=>{if(r[f.k])out.push([f.label,r[f.k]]);});if(m&&m.highlight&&String(m.highlight).trim())out.push(['Highlight to share with the family',String(m.highlight).trim()]);return out;}
+function trialReportText(m){const parts=trialReportPairs(m).map(p=>p[0]+': '+p[1]);const note=m&&(m.teacherComment_en||m.teacherComment);if(note)parts.push('Note: '+note);return parts.join(' · ');}
 function tabTrial(id){const trials=trialsForClass(id);if(!trials.length)return '<div class="card"><p class="muted">No trial class for this group right now.</p></div>';
  return trials.map(m=>{const s=m.snap||{};const ackd=m.status==='ack';return `<div class="card" style="border-color:var(--purple)">
    <h3 style="color:var(--purple)">🎒 Trial Class — ${esc(trialChild(s))}</h3>
@@ -2160,14 +2171,31 @@ function tabTrial(id){const trials=trialsForClass(id);if(!trials.length)return '
    ${m.includeOffice&&s.comentario?`<div class="flag ok" style="margin-top:8px"><span class="fi">💬</span><div><b>From the office:</b> ${esc(s.comentario)}</div></div>`:''}
    ${m.coordNote?`<div class="flag warn" style="margin-top:8px"><span class="fi">📌</span><div><b>Coordination notes:</b> ${esc(m.coordNote)}</div></div>`:''}
    ${ackd?`<div class="flag ok" style="margin-top:8px"><span class="fi">✅</span><div>You confirmed you'll prepare for this trial. 🎉</div></div>`:`<div style="margin-top:10px" class="no-print"><button class="btn" style="background:var(--purple);border-color:var(--purple)" onclick="trialAck('${m.id}','${id}')">👍 Understood, I'll prepare</button> <button class="btn ghost" onclick="trialDismissBanner('${m.id}','${id}')">Dismiss</button></div>`}
-   <label class="fl" style="margin-top:12px">Your note on the trial day <span class="muted small">(how the child did — coordination follows up with the family)</span></label>
-   <textarea class="inp" id="trtc_${m.id}" rows="3" placeholder="e.g. The child engaged really well and loved the songs; a little shy at first but warmed up.">${esc(m.teacherComment_src||m.teacherComment||'')}</textarea>
-   <button class="btn sm" style="margin-top:6px" onclick="trialTeacherComment('${m.id}','${id}')">💾 Save note</button>
+   <div style="margin-top:12px;border-top:1px dashed #D9C6E8;padding-top:10px">
+     <h4 style="margin:0 0 2px;color:var(--purple)">📝 Trial report — your view of the child</h4>
+     <p class="muted small" style="margin:0 0 6px">Fill this in after the class. Coordination uses it to understand the child and follow up with the family.</p>
+     ${TRIAL_REPORT_FIELDS.map(f=>`<label class="fl" style="margin-top:8px">${f.label}</label>
+       <select class="inp" id="trf_${f.k}_${m.id}"><option value="">— select —</option>${f.opts.map(o=>`<option ${((m.report||{})[f.k]===o)?'selected':''}>${esc(o)}</option>`).join('')}</select>`).join('')}
+     <label class="fl" style="margin-top:8px">Highlight / wow moment <span class="muted small">(something lovely to share with the family)</span></label>
+     <input class="inp" id="trh_${m.id}" value="${esc(m.highlight||'')}" placeholder="e.g. Lit up during the animal song and repeated 'cow!' on her own">
+     <label class="fl" style="margin-top:8px">Overall note on the trial day <span class="muted small">(how the child did, in your words)</span></label>
+     <textarea class="inp" id="trtc_${m.id}" rows="3" placeholder="e.g. Engaged really well and loved the songs; a little shy at first but warmed up.">${esc(m.teacherComment_src||m.teacherComment||'')}</textarea>
+     <button class="btn sm" style="margin-top:8px;background:var(--purple);border-color:var(--purple)" onclick="saveTrialReport('${m.id}','${id}')">💾 Save trial report</button>
+   </div>
  </div>`;}).join('');
 }
 function trialAck(mid,cid){const m=trialById(mid);if(!m)return;m.status='ack';m.ts=Date.now();save();toast('✅ All set — you are ready for the trial');renderClass(cid);}
 function trialTeacherComment(mid,cid){const m=trialById(mid);if(!m)return;const el=$('#trtc_'+mid);const v=el?String(el.value).trim():'';m.teacherComment_src=v;
  const fin=()=>{save();toast('💾 Note saved');renderClass(cid);};
+ if(v){gTranslate(v).then(en=>{m.teacherComment_en=en;m.teacherComment=v;fin();});}else{m.teacherComment=v;m.teacherComment_en='';fin();}
+}
+/* Save the full structured trial report. Writes only to the trial wrapper (report/highlight/teacherComment);
+   the CRM lead in m.snap is never modified. */
+function saveTrialReport(mid,cid){const m=trialById(mid);if(!m)return;m.report=m.report||{};
+ TRIAL_REPORT_FIELDS.forEach(f=>{const el=$('#trf_'+f.k+'_'+mid);m.report[f.k]=el?String(el.value):'';});
+ const hl=$('#trh_'+mid);m.highlight=hl?String(hl.value).trim():'';
+ const el=$('#trtc_'+mid);const v=el?String(el.value).trim():'';m.teacherComment_src=v;
+ const fin=()=>{save();toast('💾 Trial report saved');renderClass(cid);};
  if(v){gTranslate(v).then(en=>{m.teacherComment_en=en;m.teacherComment=v;fin();});}else{m.teacherComment=v;m.teacherComment_en='';fin();}
 }
 /* ---- Teacher reminder: keep nudging the teacher to write the trial-day note until it is filled in.
@@ -2176,7 +2204,7 @@ function trialTeacherComment(mid,cid){const m=trialById(mid);if(!m)return;const 
    note is saved or coordination closes the cycle (trialsForClass excludes 'done'). ===== */
 function trialDayReached(m){const s=m.snap||{};if(!s.data)return true;const d=new Date(s.data);if(isNaN(d))return true;
  const now=new Date();const dd=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());const nn=Date.UTC(now.getFullYear(),now.getMonth(),now.getDate());return dd<=nn;}
-function trialNoteMissing(m){return !(m.teacherComment&&String(m.teacherComment).trim());}
+function trialNoteMissing(m){const noteFilled=m.teacherComment&&String(m.teacherComment).trim();return !(noteFilled||trialReportPairs(m).length>0);}
 function trialNotePending(id){return trialsForClass(id).filter(m=>trialDayReached(m)&&trialNoteMissing(m));}
 function classTrialNoteReminder(id){const list=trialNotePending(id);if(!list.length)return '';
  return list.map(m=>{const s=m.snap||{};return `<div class="card" style="border-color:#E67E22;background:linear-gradient(120deg,#FFF3E6,#FFFBF6)">
