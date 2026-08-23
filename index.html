@@ -673,16 +673,26 @@ function daysToWeekdays(s){s=String(s||'');var M={Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,
 /* Calendar for ANY class so every class (incl. custom/new ones like Toddlers) is tracked, not just the
    hardcoded SCHEDULE ones. Falls back to the real school-calendar dates that land on the class's weekdays
    (so holidays/vacation stay excluded), clipped to start at the class's first report. Read-only. */
+/* Periods when a class simply did not run — those scheduled dates are NOT due for a report and must not
+   be flagged. Read-only: this only changes which dates are "expected"; it never touches any logged history.
+   e.g. Fluent Steps had no classes in August 2026. */
+const NO_CLASS_PERIODS={fluent_steps:[{from:'2026-08-01',to:'2026-08-31'}]};
+function inNoClassPeriod(cid,d){const ps=NO_CLASS_PERIODS[cid];if(!ps)return false;return ps.some(p=>d>=p.from&&d<=p.to);}
 function scheduleFor(c){
  if(!c)return [];
- if(SCHEDULE[c.id]&&SCHEDULE[c.id].length)return SCHEDULE[c.id];
- var wds=daysToWeekdays(c.days);if(!wds.length)return [];
- var all={},k;for(k in SCHEDULE){(SCHEDULE[k]||[]).forEach(function(d){if(wds.indexOf(_wd(d))>=0)all[d]=1;});}
- var arr=Object.keys(all).sort();
- var dates=sessionsOf(c.id).map(function(s){return s.date;}).filter(Boolean).sort();
- if(dates.length)arr=arr.filter(function(d){return d>=dates[0];});
- else if(arr.length>8)arr=arr.slice(-8);
- return arr;
+ var out;
+ if(SCHEDULE[c.id]&&SCHEDULE[c.id].length){out=SCHEDULE[c.id];}
+ else{
+  var wds=daysToWeekdays(c.days);if(!wds.length)return [];
+  var all={},k;for(k in SCHEDULE){(SCHEDULE[k]||[]).forEach(function(d){if(wds.indexOf(_wd(d))>=0)all[d]=1;});}
+  var arr=Object.keys(all).sort();
+  var dates=sessionsOf(c.id).map(function(s){return s.date;}).filter(Boolean).sort();
+  if(dates.length)arr=arr.filter(function(d){return d>=dates[0];});
+  else if(arr.length>8)arr=arr.slice(-8);
+  out=arr;
+ }
+ if(NO_CLASS_PERIODS[c.id])out=out.filter(function(d){return !inNoClassPeriod(c.id,d);});
+ return out;
 }
 function isOverdue(c){
  const reps=sessionsOf(c.id).map(s=>s.date).filter(Boolean).sort();
@@ -3331,10 +3341,20 @@ function coordNurserySkills(cid,name){
  s+=pickN([`Embed these targets in songs, routines and hands-on play with short, spaced repetition.`,`Weave these into daily routines and sensory play so growth feels natural for ${f}.`,`Build these into the project and everyday play with gentle, repeated exposure.`],seed>>3);
  return s.trim();
 }
+/* Parent-friendly names for the Nursery skill domains — plain language families understand (parents only;
+   coordination keeps the pedagogical names). Read-only labelling; no history or ratings are changed. */
+const NURSERY_PARENT_LABELS={
+ "Listening & Understanding":"Understanding English",
+ "Emerging Speaking":"First words in English",
+ "Social & Emotional":"Confidence & making friends",
+ "Fine & Gross Motor":"Little hands & movement",
+ "Focus & Engagement":"Focus & joining in",
+ "Project focus":"Our class project"
+};
 /* Single source of truth for the report's Skills development block (parent vs coordination tone). */
 function reportSkillsHtml(cid,name,mode){
  const c=getClass(cid);const set=SKILLSETS[c.level]||SKILLSETS.K1;
- if(c.track==='nursery'){const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};const chips=set.map(function(s){const v=snap[s]||'Not yet';const e=v==='Confident'?'🌸':v==='Emerging'?'🌿':'🌱';return `<span class="chip">${e} ${esc(s)}</span>`;}).join(' ');const narr=mode==='coord'?coordNurserySkills(cid,name):parentSkillsNarrative(cid,name);return `<div style="margin-bottom:6px">${chips}</div><div class="narr">${esc(narr)}</div>`;}
+ if(c.track==='nursery'){const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};const chips=set.map(function(s){const v=snap[s]||'Not yet';const e=v==='Confident'?'🌸':v==='Emerging'?'🌿':'🌱';const lbl=(mode==='parent'&&NURSERY_PARENT_LABELS[s])?NURSERY_PARENT_LABELS[s]:s;return `<span class="chip">${e} ${esc(lbl)}</span>`;}).join(' ');const narr=mode==='coord'?coordNurserySkills(cid,name):parentSkillsNarrative(cid,name);return `<div style="margin-bottom:6px">${chips}</div><div class="narr">${esc(narr)}</div>`;}
  if(['Kinder','KinderPlus'].indexOf(c.level)>=0){
    if(mode==='coord'){const a=kinderSkillsAgg(cid,name);const chips=Object.keys(a.agg).map(function(d){const v=a.agg[d];const e=v==='Proficient'?'🌸':'🌿';return `<span class="chip">${e} ${esc(d)}</span>`;}).join(' ');return `${chips?`<div style="margin-bottom:6px">${chips}</div>`:''}<div class="narr">${esc(coordKinderSkills(cid,name))}</div>`;}
    return `<div class="narr">${esc(parentKinderSkills(cid,name))}</div>`;
