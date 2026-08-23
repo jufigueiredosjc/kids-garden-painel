@@ -460,7 +460,7 @@ const SEED_SKILLS={};
 const CLASS_BASE=JSON.parse(JSON.stringify(CLASSES));
 let STATE=load();
 try{applyClassMeta();}catch(e){}
-function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],trials:{},projects:{},unitsAdd:{},parentDevNote:{},attnResolved:{},tombstones:{}};}
+function blank(){return {sessions:{},skills:{},tests:{},notes:{},messages:{},actions:{},dollarAdj:{},dollarAdjNote:{},classMeta:{},customClasses:[],teacherTasks:[],taskLog:[],trials:{},projects:{},unitsAdd:{},parentDevNote:{},aiReport:{},attnResolved:{},tombstones:{}};}
 function load(){
  let s=null;
  try{const r=localStorage.getItem(LS_KEY);if(r)s=JSON.parse(r);}catch(e){}
@@ -520,7 +520,7 @@ function applyTombstones(m){var T=m&&m.tombstones;if(!T)return m;var any=false,k
 function mergeStatesForSave(base,loc){var m={},k;for(k in base)m[k]=base[k];for(k in loc)if(!(k in m))m[k]=loc[k];
  m.sessions=_mSessions(base.sessions||{},loc.sessions||{});m.addedStudents=_mAdded(base.addedStudents||{},loc.addedStudents||{});
  m.customClasses=_mById(base.customClasses||[],loc.customClasses||[]);m.teacherTasks=_mById(base.teacherTasks||[],loc.teacherTasks||[]);m.taskLog=_mById(base.taskLog||[],loc.taskLog||[]);m.patches=_mUniq(base.patches||[],loc.patches||[]);
- ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','projects','unitsAdd','parentDevNote','attnResolved'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
+ ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','projects','unitsAdd','parentDevNote','aiReport','attnResolved'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
  m.tombstones=_mObj(base.tombstones||{},loc.tombstones||{});
  return applyTombstones(m);}
 async function cloudSave(){if(!sbClient)return;try{
@@ -2913,7 +2913,7 @@ function printAllReports(cid){const c=getClass(cid);openReportPrint('Progress Re
 /* Semester label for the parent report — computed live from the date (Jan–Jul = 1st, from August = 2nd).
    Nothing is stored: it never touches any history. SEM_OVERRIDE is an optional session-only choice. */
 let SEM_OVERRIDE=null;
-function semesterAuto(){const iso=todayISO();const m=+iso.slice(5,7);return (m>=8?'2':'1')+'-'+iso.slice(0,4);}
+function semesterAuto(){const iso=todayISO();const m=+iso.slice(5,7);const d=+iso.slice(8,10);const second=(m>7)||(m===7&&d>=28);return (second?'2':'1')+'-'+iso.slice(0,4);}
 function semesterCur(){return SEM_OVERRIDE||semesterAuto();}
 function semLabelOf(v){const p=String(v).split('-');return (p[0]==='1'?'1st':'2nd')+' Semester '+(p[1]||'');}
 function semesterLabel(){return semLabelOf(semesterCur());}
@@ -2921,6 +2921,31 @@ function setSemOverride(v){SEM_OVERRIDE=v||null;renderCoord();}
 function semesterPicker(){const y=+todayISO().slice(0,4);const cur=SEM_OVERRIDE||'';const vals=['1-'+y,'2-'+y,'1-'+(y+1),'2-'+(y+1)];
  const o=`<option value="" ${cur===''?'selected':''}>Automatic (${semLabelOf(semesterAuto())})</option>`+vals.map(v=>`<option value="${v}" ${cur===v?'selected':''}>${semLabelOf(v)}</option>`).join('');
  return `<label class="muted small" style="margin-left:10px;white-space:nowrap">🗓 Semester: <select class="inp" style="width:auto;display:inline-block;padding:4px 8px" onchange="setSemOverride(this.value)">${o}</select></label>`;}
+/* ===== AI report narratives (Caminho 1): calls the Supabase Edge Function to rewrite each report section
+   from the child's REAL teacher observations (semester-filtered), neuroscience-based and unique per child.
+   Result is saved in STATE.aiReport (coordination-editable) — it NEVER touches any logged history. ===== */
+const AI_FN_URL=SB_URL+"/functions/v1/gerar-relatorio";
+let AI_BUSY=false;
+function aiKey(cid,name,section,sem){return cid+'::'+name+'::'+section+'::'+sem;}
+function aiGet(cid,name,section,sem){STATE.aiReport=STATE.aiReport||{};const v=STATE.aiReport[aiKey(cid,name,section,sem)];return (v&&String(v).trim())?String(v):'';}
+function semDateRange(sem){const p=String(sem).split('-');const y=+p[1]||(new Date().getFullYear());return p[0]==='1'?{from:y+'-01-01',to:y+'-07-07'}:{from:y+'-07-28',to:y+'-12-31'};}
+function obsForSemester(cid,name,sem){const R=semDateRange(sem);const out=[];try{sessionsOf(cid).forEach(function(s){const d=s.date||'';if(d>=R.from&&d<=R.to){const r=(s.rows||{})[name];if(r&&r.obs&&String(r.obs).trim())out.push(String(r.obs).trim());}});}catch(e){}return out;}
+function aiSkillsPayload(cid,name){const skl=STATE.skills[cid]||{};const ss={};Object.values(skl).forEach(function(per){const r=per[name];if(r)Object.entries(r).forEach(function(e){const k=e[0],v=e[1];if(v&&v!=='Not assessed'&&v!=='Not yet'){if(v==='Proficient'||v==='Confident'||ss[k]===undefined)ss[k]=v;}});});return Object.keys(ss).map(function(k){return {name:k,rating:ss[k]};});}
+async function aiGenerate(cid,name,section){const c=getClass(cid);if(!c)return;const sem=semesterCur();const st=studentStats(cid,name);
+ const payload={firstName:parentFirst(cid,name),level:c.level,semesterLabel:semesterLabel(),attendancePct:st.attRate,classesRecorded:st.seen,skills:aiSkillsPayload(cid,name),observations:obsForSemester(cid,name,sem),section:section};
+ const res=await fetch(AI_FN_URL,{method:'POST',headers:{'content-type':'application/json','Authorization':'Bearer '+SB_KEY},body:JSON.stringify(payload)});
+ const j=await res.json();if(j&&j.text){STATE.aiReport=STATE.aiReport||{};STATE.aiReport[aiKey(cid,name,section,sem)]=j.text;save();return j.text;}
+ throw new Error((j&&j.error)?(typeof j.error==='string'?j.error:JSON.stringify(j.error)):'no text');}
+async function aiGenSection(cid,name,section){if(AI_BUSY){toast('⏳ Please wait…');return;}AI_BUSY=true;toast('✨ Writing with AI…');try{await aiGenerate(cid,name,section);toast('✅ Generated');}catch(e){toast('❌ '+((e&&e.message)||e));}AI_BUSY=false;try{renderCoord();}catch(e){}}
+async function aiGenAll(cid,name){if(AI_BUSY){toast('⏳ Please wait…');return;}AI_BUSY=true;const secs=['overall','skills','highlights','devNote'];let ok=0;for(const s of secs){toast('✨ Writing '+s+'…');try{await aiGenerate(cid,name,s);ok++;}catch(e){toast('❌ '+s+': '+((e&&e.message)||e));}}AI_BUSY=false;toast('✅ '+ok+'/4 sections generated');try{renderCoord();}catch(e){}}
+function aiClear(cid,name){const sem=semesterCur();STATE.aiReport=STATE.aiReport||{};['overall','skills','highlights','devNote'].forEach(function(s){delete STATE.aiReport[aiKey(cid,name,s,sem)];});save();toast('↺ AI text cleared — back to the automatic version');try{renderCoord();}catch(e){}}
+function aiPanel(cid,name){const sem=semesterCur();const ns=esc(name).replace(/'/g,"\\'");const secs=[['overall','How the child is doing'],['skills','Skills reading'],['highlights','Highlights'],['devNote','Development note']];const any=secs.some(function(s){return aiGet(cid,name,s[0],sem);});
+ return `<div class="no-print card" style="margin-top:14px;border-color:#6A1B9A;background:linear-gradient(120deg,#F6EEFB,#FCF8FF)">
+  <h3 style="color:#6A1B9A">✨ AI writing — unique per child (neuroscience-based)</h3>
+  <p class="hint">Reads <b>${esc(parentFirst(cid,name))}</b>'s real teacher observations from the <b>${esc(semesterLabel())}</b> and rewrites each section, unique to this child. Saved and editable; regenerate anytime. No history is ever changed.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" style="background:#6A1B9A;border-color:#6A1B9A" onclick="aiGenAll('${cid}','${ns}')">✨ Generate all with AI</button>
+  ${secs.map(function(s){return `<button class="btn ghost sm" onclick="aiGenSection('${cid}','${ns}','${s[0]}')">↻ ${esc(s[1])}${aiGet(cid,name,s[0],sem)?' ✓':''}</button>`;}).join('')}
+  ${any?`<button class="btn ghost sm" style="color:var(--bad)" onclick="aiClear('${cid}','${ns}')">↺ Clear AI</button>`:''}</div></div>`;}
 function parentHeader(){const logo=(document.querySelector('.logo-img')||{}).src||'';return `<div style="display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--green);padding-bottom:14px;margin-bottom:16px">${logo?`<img src="${logo}" style="height:54px;width:auto">`:'<div></div>'}<div style="margin-left:auto;text-align:right"><h2 style="margin:0;color:var(--navy)">Progress Report</h2><div class="muted small">Neuroscience-based bilingual education</div></div></div>`;}
 function parentFirst(cid,name){return (displayName(cid,name)||name).split(' ')[0];}
 /* Distinctive positive traits observed for THIS child, read ONLY from positive-toned written observations,
@@ -2950,7 +2975,7 @@ function parentOverall(cid,name){const f=parentFirst(cid,name);const seed=seedOf
 function parentOverviewBullets(cid,name){const st=studentStats(cid,name);const prof=strongSkills(cid,name);const B=[];
  if(st.attRate!=null)B.push(`<b>Attendance:</b> ${st.attRate}%. ${st.attRate>=90?'A consistent presence in class.':st.attRate>=75?'A good presence in class.':'More regular attendance would support steady progress.'}`);
  if(prof.length)B.push(`<b>Confident in:</b> ${prof.map(esc).join(', ')}.`);
- B.push(`<b>Overall:</b> ${parentOverall(cid,name)}`);
+ B.push(`<b>Overall:</b> ${(function(){const ai=aiGet(cid,name,'overall',semesterCur());return ai?esc(ai):parentOverall(cid,name);})()}`);
  return B;}
 /* Parent-facing note for a single unit test. Acts as a bilingual-development specialist: interprets the
    score band + the theme of the teacher's note (never echoing the raw note) into gentle, trustworthy words. */
@@ -3072,7 +3097,7 @@ function parentHighlightsRich(cid,name){
  if(!B.length)B.push(pickN([`%F% brings a positive, curious attitude that supports steady progress in English.`,`%F% engages warmly with English and is building a genuine connection with the language.`],seed));
  return `<ul style="margin:0 0 0 18px">${B.slice(0,5).map(x=>`<li>${esc(x.replace(/%F%/g,f))}</li>`).join('')}</ul>`;
 }
-function parentHighlights(cid,name){const c=getClass(cid);if(c&&['K2','K3','K4','K5','K6','TeensB1','TeensB2'].indexOf(c.level)>=0)return parentHighlightsRich(cid,name);const f=parentFirst(cid,name);const st=studentStats(cid,name);const prof=strongSkills(cid,name);
+function parentHighlights(cid,name){const _ai=aiGet(cid,name,'highlights',semesterCur());if(_ai)return `<div class="narr">${esc(_ai)}</div>`;const c=getClass(cid);if(c&&['K2','K3','K4','K5','K6','TeensB1','TeensB2'].indexOf(c.level)>=0)return parentHighlightsRich(cid,name);const f=parentFirst(cid,name);const st=studentStats(cid,name);const prof=strongSkills(cid,name);
  let obs='';try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}const blob=obs.toLowerCase();const B=[];
  if(prof.length)B.push(`${f} communicates in English with real confidence in ${prof.slice(0,3).join(', ')}.`);
  if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(blob))B.push(`${f} takes part actively and with genuine enthusiasm, contributing naturally in English.`);
@@ -3213,7 +3238,7 @@ function parentDevNoteAuto(cid,name){
  return s.trim();
 }
 function parentDevNoteKey(cid,name){return cid+'::'+name;}
-function parentDevNoteText(cid,name){STATE.parentDevNote=STATE.parentDevNote||{};const ov=STATE.parentDevNote[parentDevNoteKey(cid,name)];return (ov&&String(ov).trim())?String(ov):parentDevNoteAuto(cid,name);}
+function parentDevNoteText(cid,name){STATE.parentDevNote=STATE.parentDevNote||{};const ov=STATE.parentDevNote[parentDevNoteKey(cid,name)];if(ov&&String(ov).trim())return String(ov);const ai=aiGet(cid,name,'devNote',semesterCur());if(ai)return ai;return parentDevNoteAuto(cid,name);}
 function saveParentDevNote(cid,name){const el=$("#pdn_text");if(!el)return;const t=el.value.trim();STATE.parentDevNote=STATE.parentDevNote||{};if(t)STATE.parentDevNote[parentDevNoteKey(cid,name)]=t;else delete STATE.parentDevNote[parentDevNoteKey(cid,name)];save();toast('✅ Development note saved');renderCoord();}
 function resetParentDevNote(cid,name){STATE.parentDevNote=STATE.parentDevNote||{};delete STATE.parentDevNote[parentDevNoteKey(cid,name)];save();toast('↺ Reset to the automatic note');renderCoord();}
 function parentDevEditPanel(cid,name){const f=parentFirst(cid,name);STATE.parentDevNote=STATE.parentDevNote||{};const ov=STATE.parentDevNote[parentDevNoteKey(cid,name)]&&String(STATE.parentDevNote[parentDevNoteKey(cid,name)]).trim();const ns=esc(name).replace(/'/g,"\\'");
@@ -3353,6 +3378,7 @@ const NURSERY_PARENT_LABELS={
 };
 /* Single source of truth for the report's Skills development block (parent vs coordination tone). */
 function reportSkillsHtml(cid,name,mode){
+ if(mode==='parent'){const _ai=aiGet(cid,name,'skills',semesterCur());if(_ai)return `<div class="narr">${esc(_ai)}</div>`;}
  const c=getClass(cid);const set=SKILLSETS[c.level]||SKILLSETS.K1;
  if(c.track==='nursery'){const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};const chips=set.map(function(s){const v=snap[s]||'Not yet';const e=v==='Confident'?'🌸':v==='Emerging'?'🌿':'🌱';const lbl=(mode==='parent'&&NURSERY_PARENT_LABELS[s])?NURSERY_PARENT_LABELS[s]:s;return `<span class="chip">${e} ${esc(lbl)}</span>`;}).join(' ');const narr=mode==='coord'?coordNurserySkills(cid,name):parentSkillsNarrative(cid,name);return `<div style="margin-bottom:6px">${chips}</div><div class="narr">${esc(narr)}</div>`;}
  if(['Kinder','KinderPlus'].indexOf(c.level)>=0){
@@ -3384,7 +3410,7 @@ function parentReportCard(cid,name,sel){const inc=k=>!sel||sel[k]!==false;
 function parentBlock(cid,n){const c=getClass(cid);return `<table class="rpt-block"><thead><tr><td><div class="rpt-runhead">Progress Report · ${esc(displayName(cid,n))} · ${esc(c.teacher)}</div></td></tr></thead><tbody><tr><td>${parentReportCard(cid,n)}</td></tr></tbody></table>`;}
 function parentReportFull(){const cid=RPT.cid,name=RPT.name;const c=getClass(cid);if(!c)return '';
  if(name==='__ALL__'){const studs=activeStudents(c);return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParentAll('${cid}')" style="margin-left:8px">🖨 Print all / Save PDF</button> <button class="btn" style="background:#1B7A3A;border-color:#1B7A3A;margin-left:6px" onclick="downloadEachReport('${cid}','parent')">⬇️ Download each (individual files)</button>${canPickSections(c)?` <button class="btn" style="background:#6A1B9A;border-color:#6A1B9A;margin-left:6px" onclick="parentPickModal('${cid}','__ALL__')">🧩 Choose sections & download</button>`:''} <span class="muted small" style="margin-left:8px">Parent reports — ${studs.length} student${studs.length===1?'':'s'} · one clean A4 page each</span>${semesterPicker()}</div>${studs.length?studs.map(n=>parentBlock(cid,n)).join(''):'<div class="card"><p class="muted">No active students.</p></div>'}`;}
- return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParent('${cid}','${esc(name).replace(/'/g,"\\'")}')" style="margin-left:8px">🖨 Print / Save PDF</button>${canPickSections(c)?` <button class="btn" style="background:#6A1B9A;border-color:#6A1B9A;margin-left:6px" onclick="parentPickModal('${cid}','${esc(name).replace(/'/g,"\\'")}')">🧩 Choose sections & send</button>`:''} <span class="muted small" style="margin-left:8px">Parent report</span>${semesterPicker()}</div>${parentBlock(cid,name)}${parentDevEditPanel(cid,name)}`;}
+ return `<div class="no-print" style="margin-bottom:14px"><button class="back" onclick="RPT={};setCoordTab('reports')">← Back</button> <button class="btn navy" onclick="printParent('${cid}','${esc(name).replace(/'/g,"\\'")}')" style="margin-left:8px">🖨 Print / Save PDF</button>${canPickSections(c)?` <button class="btn" style="background:#6A1B9A;border-color:#6A1B9A;margin-left:6px" onclick="parentPickModal('${cid}','${esc(name).replace(/'/g,"\\'")}')">🧩 Choose sections & send</button>`:''} <span class="muted small" style="margin-left:8px">Parent report</span>${semesterPicker()}</div>${parentBlock(cid,name)}${aiPanel(cid,name)}${parentDevEditPanel(cid,name)}`;}
 function printParent(cid,name){openReportPrint('Progress Report — '+displayName(cid,name),parentBlock(cid,name));}
 function printParentAll(cid){const c=getClass(cid);openReportPrint('Progress Reports — '+(c?c.name:''),activeStudents(c).map(n=>parentBlock(cid,n)).join(''));}
 /* Coordination picks which sections of the parent report to send. Purely a rendering/download choice — no history touched. */
