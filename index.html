@@ -2926,13 +2926,21 @@ function semesterPicker(){const y=+todayISO().slice(0,4);const cur=SEM_OVERRIDE|
    Result is saved in STATE.aiReport (coordination-editable) — it NEVER touches any logged history. ===== */
 const AI_FN_URL=SB_URL+"/functions/v1/gerar-relatorio";
 let AI_BUSY=false;
+const AI_INSTRUCTIONS={
+ overall:"Write 2 to 3 short, warm sentences on how the child is doing overall this period. One short paragraph, no bullet points, no preamble.",
+ skills:"Write 2 to 4 SHORT bullet points on the child's skill development, in plain parent-friendly language (no jargon). Start each line with '- '. Keep each bullet under about 14 words. No paragraph, no intro line.",
+ highlights:"Write 2 to 4 SHORT bullet points highlighting concrete lovely moments the teacher actually wrote in the observations (use the real detail). Start each line with '- '. Keep each bullet short. No paragraph, no intro line.",
+ devNote:"Write 2 to 4 short sentences as a warm closing note on the child's development, framed through neuroscience. It MUST be clearly DIFFERENT from and must NOT repeat the skills or highlights already shown — add a fresh, complementary insight (the child's personality, how their brain is learning, gentle encouragement, or a simple home tip). One short paragraph, no bullet points."
+};
+function aiRenderList(text){const items=String(text||'').split(/\n+/).map(function(l){return l.replace(/^\s*[-*•]\s*/,'').trim();}).filter(Boolean);if(items.length<2)return '';return `<ul style="margin:0 0 0 18px">${items.map(function(x){return `<li style="margin-bottom:4px">${esc(x)}</li>`;}).join('')}</ul>`;}
 function aiKey(cid,name,section,sem){return cid+'::'+name+'::'+section+'::'+sem;}
 function aiGet(cid,name,section,sem){STATE.aiReport=STATE.aiReport||{};const v=STATE.aiReport[aiKey(cid,name,section,sem)];return (v&&String(v).trim())?String(v):'';}
 function semDateRange(sem){const p=String(sem).split('-');const y=+p[1]||(new Date().getFullYear());return p[0]==='1'?{from:y+'-01-01',to:y+'-07-07'}:{from:y+'-07-28',to:y+'-12-31'};}
 function obsForSemester(cid,name,sem){const R=semDateRange(sem);const out=[];try{sessionsOf(cid).forEach(function(s){const d=s.date||'';if(d>=R.from&&d<=R.to){const r=(s.rows||{})[name];if(r&&r.obs&&String(r.obs).trim())out.push(String(r.obs).trim());}});}catch(e){}return out;}
 function aiSkillsPayload(cid,name){const skl=STATE.skills[cid]||{};const ss={};Object.values(skl).forEach(function(per){const r=per[name];if(r)Object.entries(r).forEach(function(e){const k=e[0],v=e[1];if(v&&v!=='Not assessed'&&v!=='Not yet'){if(v==='Proficient'||v==='Confident'||ss[k]===undefined)ss[k]=v;}});});return Object.keys(ss).map(function(k){return {name:k,rating:ss[k]};});}
 async function aiGenerate(cid,name,section){const c=getClass(cid);if(!c)return;const sem=semesterCur();const st=studentStats(cid,name);
- const payload={firstName:parentFirst(cid,name),level:c.level,semesterLabel:semesterLabel(),attendancePct:st.attRate,classesRecorded:st.seen,skills:aiSkillsPayload(cid,name),observations:obsForSemester(cid,name,sem),section:section};
+ let avoid='';if(section==='devNote'){avoid=['skills','highlights'].map(function(s){return aiGet(cid,name,s,sem);}).filter(Boolean).join('\n');}
+ const payload={firstName:parentFirst(cid,name),level:c.level,semesterLabel:semesterLabel(),attendancePct:st.attRate,classesRecorded:st.seen,skills:aiSkillsPayload(cid,name),observations:obsForSemester(cid,name,sem),section:section,instruction:(AI_INSTRUCTIONS[section]||''),avoid:avoid};
  const res=await fetch(AI_FN_URL,{method:'POST',headers:{'content-type':'application/json','Authorization':'Bearer '+SB_KEY},body:JSON.stringify(payload)});
  const j=await res.json();if(j&&j.text){STATE.aiReport=STATE.aiReport||{};STATE.aiReport[aiKey(cid,name,section,sem)]=j.text;save();return j.text;}
  throw new Error((j&&j.error)?(typeof j.error==='string'?j.error:JSON.stringify(j.error)):'no text');}
@@ -3097,7 +3105,7 @@ function parentHighlightsRich(cid,name){
  if(!B.length)B.push(pickN([`%F% brings a positive, curious attitude that supports steady progress in English.`,`%F% engages warmly with English and is building a genuine connection with the language.`],seed));
  return `<ul style="margin:0 0 0 18px">${B.slice(0,5).map(x=>`<li>${esc(x.replace(/%F%/g,f))}</li>`).join('')}</ul>`;
 }
-function parentHighlights(cid,name){const _ai=aiGet(cid,name,'highlights',semesterCur());if(_ai)return `<div class="narr">${esc(_ai)}</div>`;const c=getClass(cid);if(c&&['K2','K3','K4','K5','K6','TeensB1','TeensB2'].indexOf(c.level)>=0)return parentHighlightsRich(cid,name);const f=parentFirst(cid,name);const st=studentStats(cid,name);const prof=strongSkills(cid,name);
+function parentHighlights(cid,name){const _ai=aiGet(cid,name,'highlights',semesterCur());if(_ai){const _L=aiRenderList(_ai);return _L||`<div class="narr">${esc(_ai)}</div>`;}const c=getClass(cid);if(c&&['K2','K3','K4','K5','K6','TeensB1','TeensB2'].indexOf(c.level)>=0)return parentHighlightsRich(cid,name);const f=parentFirst(cid,name);const st=studentStats(cid,name);const prof=strongSkills(cid,name);
  let obs='';try{sessionsOf(cid).forEach(s=>{const r=(s.rows||{})[name];if(r&&r.obs)obs+=' '+r.obs;});}catch(e){}const blob=obs.toLowerCase();const B=[];
  if(prof.length)B.push(`${f} communicates in English with real confidence in ${prof.slice(0,3).join(', ')}.`);
  if(/engag|participat|enthusias|loved|enjoy|active|volunteer/.test(blob))B.push(`${f} takes part actively and with genuine enthusiasm, contributing naturally in English.`);
@@ -3378,7 +3386,7 @@ const NURSERY_PARENT_LABELS={
 };
 /* Single source of truth for the report's Skills development block (parent vs coordination tone). */
 function reportSkillsHtml(cid,name,mode){
- if(mode==='parent'){const _ai=aiGet(cid,name,'skills',semesterCur());if(_ai)return `<div class="narr">${esc(_ai)}</div>`;}
+ if(mode==='parent'){const _ai=aiGet(cid,name,'skills',semesterCur());if(_ai){const _L=aiRenderList(_ai);return _L||`<div class="narr">${esc(_ai)}</div>`;}}
  const c=getClass(cid);const set=SKILLSETS[c.level]||SKILLSETS.K1;
  if(c.track==='nursery'){const snap=((STATE.skills[cid]||{})[0]||{})[name]||{};const chips=set.map(function(s){const v=snap[s]||'Not yet';const e=v==='Confident'?'🌸':v==='Emerging'?'🌿':'🌱';const lbl=(mode==='parent'&&NURSERY_PARENT_LABELS[s])?NURSERY_PARENT_LABELS[s]:s;return `<span class="chip">${e} ${esc(lbl)}</span>`;}).join(' ');const narr=mode==='coord'?coordNurserySkills(cid,name):parentSkillsNarrative(cid,name);return `<div style="margin-bottom:6px">${chips}</div><div class="narr">${esc(narr)}</div>`;}
  if(['Kinder','KinderPlus'].indexOf(c.level)>=0){
