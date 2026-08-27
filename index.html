@@ -2012,7 +2012,10 @@ function newTrialsCount(){return allTrials().filter(m=>m.status==='new').length;
 function trialChild(s){return String((s&&s.crianca)||'').trim()||'(no name)';}
 function trialAge(s){return String((s&&s.idade)||'').replace(/\s*anos?\b/i,' years old').trim();}
 function trialDate(s){try{var d=new Date(s.data);if(isNaN(d))return String(s.data||'');return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:'UTC'});}catch(e){return String(s.data||'');}}
-function trialTime(s){var h=String((s&&s.horario)||'');var m=h.match(/T(\d{2}):(\d{2})/);if(!m)return h;var H=+m[1],M=m[2],ap=H>=12?'PM':'AM',h12=((H+11)%12)+1;return h12+':'+M+' '+ap;}
+/* The commercial CRM sheet is configured to the America/New_York time zone, so a time typed as 9:30
+   is serialized as 14:30Z. Formatting the value back in that same zone recovers exactly what the CRM
+   shows — perfect sync. Read-only display: no child history is touched. */
+function trialTime(s){var h=String((s&&s.horario)||'');if(!h)return '';var d=new Date(h);if(!isNaN(d)){try{return new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'America/New_York'}).format(d);}catch(e){}}var m=h.match(/T(\d{2}):(\d{2})/);if(!m)return h;var H=((+m[1])+24-5)%24,M=m[2],ap=H>=12?'PM':'AM',h12=((H+11)%12)+1;return h12+':'+M+' '+ap;}
 async function loadTrials(){
  if(TRIALS_LOADING)return;TRIALS_LOADING=true;
  try{const r=await fetch(CRM_TRIALS_URL);const j=await r.json();const aulas=(j&&j.aulas)||[];ensureTrials();
@@ -2116,7 +2119,7 @@ function trialCoordCard(m){const s=m.snap||{};const id=m.id;const assigned=m.cla
  const badge={new:'<span class="badge b-late">New</span>',assigned:'<span class="badge b-na">Sent to teacher</span>',ack:'<span class="badge b-present">Teacher ready</span>',done:'<span class="badge">Closed</span>'}[m.status]||'';
  return `<div class="card" style="border-color:var(--purple)">
    <h3 style="color:var(--purple)">🎒 ${esc(trialChild(s))} ${badge}</h3>
-   <div class="sub">🎂 ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))} · 👩‍🏫 Teacher: ${esc(s.responsavel||'—')}</div>
+   <div class="sub">🎂 ${esc(trialAge(s))} · 📅 ${esc(trialDate(s))} · 🕝 ${esc(trialTime(s))} · 👨‍👩‍👧 Parent/Guardian: ${esc(s.responsavel||'—')}${s.professor?` · 👩‍🏫 CRM teacher: ${esc(s.professor)}`:''}</div>
    ${s.comentario?`<div class="flag ok" style="margin-top:8px"><span class="fi">💬</span><div><b>Office comment:</b> ${esc(s.comentario)}</div></div>`:''}
    <div class="row c2" style="margin-top:10px"><div><label class="fl">Assign to class (defines the teacher)</label><select class="inp" id="trcls_${id}">${clsOpts}</select></div>
      <div><label class="fl">Suggested by CRM</label><input class="inp" value="${esc(s.professor||'—')}" disabled></div></div>
