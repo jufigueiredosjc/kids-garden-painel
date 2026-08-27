@@ -1728,7 +1728,7 @@ function nurseryGuideInner(){return `
    Same developmental snapshot framework; only the projects come from the class's own list (coordination-managed). */
 function tabSkillsOwnProjects(id){
  const c=getClass(id);const domains=SKILLSETS.Nursery;const ud=(STATE.skills[id]||{})[0]||{};
- const own=levelProjects(c.name);
+ const own=projectsByKey(c.name);
  if(NURSERY_PROJ>=own.length||NURSERY_PROJ<0)NURSERY_PROJ=0;
  const sel=own[NURSERY_PROJ]||own[0]||{name:'',skills:[]};
  const projBtns=own.map((p,i)=>`<button class="unit-tab ${i===NURSERY_PROJ?'active':''}" onclick="setNurseryProj(${i},'${id}')">📘 ${esc(p.name)}</button>`).join('');
@@ -1757,7 +1757,7 @@ function tabSkillsNursery(id){
  /* If this class has its OWN projects (with real competencies), it is disassociated from the shared
     Nursery curriculum and uses its own framework. Otherwise it falls through to the ORIGINAL Nursery
     rendering below, completely unchanged. */
- if(levelProjects(c.name).some(function(p){return (p.skills||[]).length;}))return tabSkillsOwnProjects(id);
+ if(projectsByKey(c.name).some(function(p){return (p.skills||[]).length;}))return tabSkillsOwnProjects(id);
  const domains=SKILLSETS.Nursery;const ud=(STATE.skills[id]||{})[0]||{};
  if(NURSERY_PROJ>=NURSERY_PROJECTS.length)NURSERY_PROJ=1;
  const sel=NURSERY_PROJECTS[NURSERY_PROJ];
@@ -2242,6 +2242,15 @@ function showTrialNoteReminder(id){const list=trialNotePending(id).filter(m=>!TR
    Stored isolated in STATE.projects[level]; full autonomy (create/edit/delete/publish). ===== */
 let COORD_SKILL_LEVEL='';
 function levelProjects(lvl){STATE.projects=STATE.projects||{};return STATE.projects[lvl]||[];}
+/* Robust lookup: projects were historically keyed by LEVEL (e.g. "TeensB1") and later by class NAME
+   (e.g. "Teens B1"). To show everything a coordinator created under either scheme, union both keys.
+   Read-only: never mutates stored data. */
+function projectsByKey(key){STATE.projects=STATE.projects||{};var seen={},out=[];
+ function add(arr){(arr||[]).forEach(function(p){var k=(p&&p.id)||JSON.stringify(p);if(seen[k])return;seen[k]=1;out.push(p);});}
+ add(STATE.projects[key]);
+ var lvl=skillLevelOf(key);if(lvl&&lvl!==key)add(STATE.projects[lvl]);
+ CLASSES.forEach(function(c){if(c.level===key&&c.name!==key)add(STATE.projects[c.name]);});
+ return out;}
 /* Skills & Competencies group by the class NAME (so K4 AM & K4 PM share, but Nursery and Toddlers stay separate). The assessment framework still comes from the class level. */
 function skillLevelOf(key){const c=CLASSES.find(x=>x.name===key&&!x.fluent&&x.special!=='cambridge');return c?c.level:'';}
 function skillSetFor(key){return SKILLSETS[skillLevelOf(key)]||[];}
@@ -2254,7 +2263,7 @@ function coordSkills(){
  const lvl=COORD_SKILL_LEVEL;
  const classesOfLevel=CLASSES.filter(c=>c.name===lvl&&!c.fluent&&c.special!=='cambridge');
  const set=skillSetFor(lvl);
- const projects=levelProjects(lvl);
+ const projects=projectsByKey(lvl);
  const unitsLevel=classesOfLevel.some(c=>c.track==='units');const units=levelUnits(lvl);
  return `<div class="card"><h3>🎯 Skills &amp; Competencies <span class="muted small">— Coordination</span></h3>
    <p class="hint">Add your own <b>Projects</b> (with their skills) per class, with full autonomy to create, edit and delete. The existing unit/phonics competencies are kept exactly as they are. Classes with the <b>same name</b> share these (e.g. K4 AM &amp; K4 PM), while different classes like <b>Nursery</b> and <b>Toddlers</b> stay separate.</p>
@@ -2271,7 +2280,7 @@ function coordSkills(){
   </div>`:''}`;
 }
 let PJ_DRAFT=null;
-function addProjectModal(lvl,pid){const p=pid?levelProjects(lvl).find(x=>x.id===pid):null;PJ_DRAFT={lvl:lvl,pid:pid||null,name:p?p.name:'',skills:(p&&p.skills)?p.skills.slice():[]};renderProjectModal();}
+function addProjectModal(lvl,pid){const p=pid?projectsByKey(lvl).find(x=>x.id===pid):null;PJ_DRAFT={lvl:lvl,pid:pid||null,name:p?p.name:'',skills:(p&&p.skills)?p.skills.slice():[]};renderProjectModal();}
 function pjSyncName(){if(PJ_DRAFT){const el=$("#pj_name");if(el)PJ_DRAFT.name=String(el.value);}}
 function renderProjectModal(){if(!PJ_DRAFT)return;const d=PJ_DRAFT;const ex=document.getElementById('pjmodal');if(ex)ex.remove();
  const items=d.skills.length?d.skills.map((s,i)=>`<div class="comp" style="display:flex;align-items:center;gap:8px;padding:6px 9px;margin:4px 0;border-color:var(--green)"><span style="flex:1">${esc(s)}</span><button class="btn ghost sm" onclick="pjDraftEdit(${i})">✏️</button><button class="btn ghost sm" style="color:var(--bad)" onclick="pjDraftDel(${i})">🗑</button></div>`).join(''):'<p class="muted small">No skills yet — add the first one below.</p>';
@@ -2286,15 +2295,15 @@ function renderProjectModal(){if(!PJ_DRAFT)return;const d=PJ_DRAFT;const ex=docu
 function pjDraftAdd(){if(!PJ_DRAFT)return;pjSyncName();const el=$("#pj_new");const v=el?String(el.value).trim():'';if(!v)return;PJ_DRAFT.skills.push(v);renderProjectModal();}
 function pjDraftEdit(i){if(!PJ_DRAFT)return;pjSyncName();const v=prompt('Edit skill / competency:',PJ_DRAFT.skills[i]);if(v!==null){const t=String(v).trim();if(t)PJ_DRAFT.skills[i]=t;else PJ_DRAFT.skills.splice(i,1);}renderProjectModal();}
 function pjDraftDel(i){if(!PJ_DRAFT)return;pjSyncName();PJ_DRAFT.skills.splice(i,1);renderProjectModal();}
-function pjDraftSave(){if(!PJ_DRAFT)return;pjSyncName();const d=PJ_DRAFT;const name=String(d.name||'').trim();if(!name){toast('✍️ Give the project a name');return;}STATE.projects=STATE.projects||{};STATE.projects[d.lvl]=STATE.projects[d.lvl]||[];if(d.pid){const p=STATE.projects[d.lvl].find(x=>x.id===d.pid);if(p){p.name=name;p.skills=d.skills;}}else{STATE.projects[d.lvl].push({id:'pj_'+Math.random().toString(36).slice(2,9),name:name,skills:d.skills});}save();PJ_DRAFT=null;const m=document.getElementById('pjmodal');if(m)m.remove();toast('✅ Project published');renderCoord();}
-function deleteProject(lvl,pid){if(!confirm('Delete this project and its skills?'))return;STATE.projects=STATE.projects||{};STATE.projects[lvl]=(STATE.projects[lvl]||[]).filter(x=>x.id!==pid);save();toast('🗑 Project deleted');renderCoord();}
+function pjDraftSave(){if(!PJ_DRAFT)return;pjSyncName();const d=PJ_DRAFT;const name=String(d.name||'').trim();if(!name){toast('✍️ Give the project a name');return;}STATE.projects=STATE.projects||{};STATE.projects[d.lvl]=STATE.projects[d.lvl]||[];if(d.pid){var _f=false;Object.keys(STATE.projects).forEach(function(k){var p=(STATE.projects[k]||[]).find(function(x){return x.id===d.pid;});if(p){p.name=name;p.skills=d.skills;_f=true;}});if(!_f)STATE.projects[d.lvl].push({id:d.pid,name:name,skills:d.skills});}else{STATE.projects[d.lvl].push({id:'pj_'+Math.random().toString(36).slice(2,9),name:name,skills:d.skills});}save();PJ_DRAFT=null;const m=document.getElementById('pjmodal');if(m)m.remove();toast('✅ Project published');renderCoord();}
+function deleteProject(lvl,pid){if(!confirm('Delete this project and its skills?'))return;STATE.projects=STATE.projects||{};Object.keys(STATE.projects).forEach(function(k){STATE.projects[k]=(STATE.projects[k]||[]).filter(function(x){return x.id!==pid;});});save();toast('🗑 Project deleted');renderCoord();}
 /* Units added by coordination (K1+ only), competencies organised by skill. Pre-formatted units are never touched. */
 function levelUnits(lvl){STATE.unitsAdd=STATE.unitsAdd||{};return STATE.unitsAdd[lvl]||[];}
 /* merge the pre-formatted unit competencies (never changed) with coordination-added ones, for a given unit number */
 function unitCompMerged(c,unitNum){const out={};const level=c&&c.level;const key=c&&c.name;const uc=(typeof UNIT_COMPETENCIES!=='undefined'&&UNIT_COMPETENCIES[level]&&UNIT_COMPETENCIES[level].units)||{};const pre=uc[String(unitNum)]||{};Object.keys(pre).forEach(s=>{if(pre[s]&&pre[s].length)out[s]=pre[s].slice();});((STATE.unitsAdd||{})[key]||[]).forEach(cu=>{if(Number(cu.unit)===Number(unitNum)&&cu.byskill){Object.keys(cu.byskill).forEach(s=>{if(cu.byskill[s]&&cu.byskill[s].length)out[s]=(out[s]||[]).concat(cu.byskill[s]);});}});return out;}
 /* coordination Projects shown read-only in the class Skills tab (and report) */
-function projectsSection(c){if(!c||c.fluent||c.special==='cambridge')return '';const ps=levelProjects(c.name);if(!ps.length)return '';return `<div class="card"><h3>🎨 Projects</h3><p class="hint">Project-based skills for this level, set by coordination.</p>${ps.map(p=>`<div class="comp" style="border-color:var(--green)"><h5>📌 ${esc(p.name)}</h5>${p.skills&&p.skills.length?`<ul style="margin:4px 0 0 18px">${p.skills.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:''}</div>`).join('')}</div>`;}
-function reportProjects(cid){const c=getClass(cid);if(!c)return '';const ps=levelProjects(c.name);if(!ps.length)return '';return `<hr class="sep"><h3>🎨 Projects</h3>${ps.map(p=>`<div class="comp" style="border-color:var(--green)"><h5>📌 ${esc(p.name)}</h5>${p.skills&&p.skills.length?`<ul>${p.skills.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:''}</div>`).join('')}`;}
+function projectsSection(c){if(!c||c.fluent||c.special==='cambridge')return '';const ps=projectsByKey(c.name);if(!ps.length)return '';return `<div class="card"><h3>🎨 Projects</h3><p class="hint">Project-based skills for this level, set by coordination.</p>${ps.map(p=>`<div class="comp" style="border-color:var(--green)"><h5>📌 ${esc(p.name)}</h5>${p.skills&&p.skills.length?`<ul style="margin:4px 0 0 18px">${p.skills.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:''}</div>`).join('')}</div>`;}
+function reportProjects(cid){const c=getClass(cid);if(!c)return '';const ps=projectsByKey(c.name);if(!ps.length)return '';return `<hr class="sep"><h3>🎨 Projects</h3>${ps.map(p=>`<div class="comp" style="border-color:var(--green)"><h5>📌 ${esc(p.name)}</h5>${p.skills&&p.skills.length?`<ul>${p.skills.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>`:''}</div>`).join('')}`;}
 let UN_DRAFT=null;
 function addUnitModal(lvl,uid){const u=uid?levelUnits(lvl).find(x=>x.id===uid):null;const byskill={};unitSkillsFor(lvl).forEach(s=>{byskill[s]=(u&&u.byskill&&u.byskill[s])?u.byskill[s].slice():[];});UN_DRAFT={lvl:lvl,uid:uid||null,unit:(u&&u.unit)?u.unit:1,byskill:byskill};renderUnitModal();}
 function addUnitModalPending(){if(!UN_DRAFT)return;UN_DRAFT.pending=UN_DRAFT.pending||{};(unitSkillsFor(UN_DRAFT.lvl)).forEach(s=>{const sid=s.replace(/[^a-zA-Z0-9]/g,'_');const el=$("#un_in_"+sid);if(el)UN_DRAFT.pending[s]=el.value;});}
