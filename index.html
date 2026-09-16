@@ -2600,7 +2600,20 @@ function coordBirthdays(){
    <p class="hint">Every child on the panel, always in alphabetical order. Use <b>✏️ Modify</b> to rename, fix the birthday or move the child to another class (records follow the move), or <b>🗑 Delete</b> to remove them. ${all.length} children.</p>
    <input class="inp" placeholder="🔍 Search a child by name or class…" oninput="filterManageChildren(this.value)" style="max-width:380px;margin-bottom:10px">
    <div class="tbl-wrap"><table id="mngTable"><tr><th>Child</th><th>Class</th><th>Birthday</th><th>Turning</th><th>Actions</th></tr>${all.map(s=>{const ns=esc(s.name).replace(/'/g,"\\'");const age=ageTurning(s.dob);return `<tr class="mng-row" data-cn="${esc((s.full+' '+s.className).toLowerCase())}"><td><b>${esc(s.full)}</b></td><td>${esc(s.className)}</td><td>${s.dob?('🎂 '+esc(fmtBday(s.dob))):'<span class="muted small">—</span>'}</td><td>${age!=null?('turns '+age):'<span class="muted small">—</span>'}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="editStudentModal('${s.cid}','${ns}')">✏️ Modify</button> <button class="btn ghost sm" style="color:var(--bad)" onclick="deleteStudentPermanently('${s.cid}','${ns}')">🗑 Delete</button></td></tr>`;}).join('')}</table></div>
-   <button class="btn" style="margin-top:12px" onclick="addStudentCoordModal()">➕ Add a student</button></div>`;})()}`;
+   <button class="btn" style="margin-top:12px" onclick="addStudentCoordModal()">➕ Add a student</button> <button class="btn ghost" style="margin-top:12px" onclick="downloadStudentsCSV()">⬇️ Baixar CSV (nome, turma, idade)</button></div>`;})()}`;
+}
+/* Download the current student list (from the loaded cloud state) as CSV: name, class, age. Read-only. */
+function downloadStudentsCSV(){
+ var all=allStudentsAdmin();
+ function ageNow(dob){if(!dob)return '';var d=new Date(dob);if(isNaN(d))return '';var t=new Date();var a=t.getFullYear()-d.getFullYear();var m=t.getMonth()-d.getMonth();if(m<0||(m===0&&t.getDate()<d.getDate()))a--;return a;}
+ var q=function(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"';};
+ var lines=[['Nome da criança','Class','Idade'].map(q).join(',')];
+ all.forEach(function(s){lines.push([s.full,s.className,ageNow(s.dob)].map(q).join(','));});
+ var csv='﻿'+lines.join('\r\n');
+ var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+ var url=URL.createObjectURL(blob);
+ var a=document.createElement('a');a.href=url;a.download='alunos-kids-garden.csv';document.body.appendChild(a);a.click();a.remove();
+ setTimeout(function(){URL.revokeObjectURL(url);},1500);toast('⬇️ CSV baixado ('+all.length+' alunos)');
 }
 function coordMsgBanner(){
  let cards='';
