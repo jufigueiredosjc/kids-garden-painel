@@ -523,14 +523,22 @@ function mergeStatesForSave(base,loc){var m={},k;for(k in base)m[k]=base[k];for(
  ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','projects','unitsAdd','parentDevNote','aiReport','attnResolved'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
  m.tombstones=_mObj(base.tombstones||{},loc.tombstones||{});
  return applyTombstones(m);}
-async function cloudSave(){if(!sbClient)return;try{
+async function cloudSave(){if(!sbClient)return false;try{
  var r=await sbClient.from('app_state').select('data').eq('id',1).single();
  var base=(!r.error&&r.data&&r.data.data&&Object.keys(r.data.data).length)?r.data.data:null;
  var merged=base?mergeStatesForSave(base,STATE):STATE;
  STATE=merged;try{applyClassMeta();}catch(e){}
  var w=await sbClient.from('app_state').update({data:merged,updated_at:new Date().toISOString(),updated_by:CURRENT_EMAIL}).eq('id',1);
- if(w&&w.error)console.warn('cloudSave',w.error.message);
-}catch(e){console.warn('cloudSave',e&&e.message||e);}}
+ if(w&&w.error){console.warn('cloudSave',w.error.message);return false;}
+ return true;
+}catch(e){console.warn('cloudSave',e&&e.message||e);return false;}}
+/* A daily report is only truly saved once it reaches the cloud. These helpers save locally, push to the
+   cloud immediately, and confirm — warning the teacher (with a retry) if it did NOT sync, so a report is
+   never silently lost. Read-only on child history: this only changes the save/sync flow. */
+function upsertSession(id,entry){STATE.sessions=STATE.sessions||{};STATE.sessions[id]=STATE.sessions[id]||[];var arr=STATE.sessions[id];var k=_sessKey(entry);var i=-1;for(var j=0;j<arr.length;j++){if(_sessKey(arr[j])===k){i=j;break;}}if(i>=0){var m=Object.assign({},arr[i],entry);m.rows=Object.assign({},arr[i].rows||{},entry.rows||{});arr[i]=m;}else{arr.push(entry);}}
+function reportSyncWarn(){var ex=document.getElementById('syncwarn');if(ex)ex.remove();var w=document.createElement('div');w.id='syncwarn';w.className='od-overlay';w.style.background='rgba(4,35,66,.5)';w.innerHTML='<div class="od-box" style="border-color:var(--bad);max-width:470px"><div class="od-ico">⚠️</div><h2 style="color:var(--bad)">Não sincronizou com a nuvem</h2><p>O relatório foi salvo <b>neste aparelho</b>, mas <b>ainda não chegou na nuvem</b> — então a coordenação e os outros ainda não veem.</p><p class="od-sub">Verifique a internet e clique em <b>Tentar sincronizar agora</b>. <b>Não feche a tela</b> até aparecer "sincronizado".</p><div style="margin-top:8px"><button class="btn navy" onclick="retryCloudSave()">🔄 Tentar sincronizar agora</button> <button class="btn ghost" onclick="var x=document.getElementById(\'syncwarn\');if(x)x.remove();">Fechar</button></div></div>';document.body.appendChild(w);}
+function retryCloudSave(){toast('⏳ Sincronizando…');Promise.resolve().then(function(){return cloudSave();}).then(function(ok){if(ok){var x=document.getElementById('syncwarn');if(x)x.remove();toast('✅ Sincronizado com a nuvem');try{render();}catch(e){}}else{toast('⚠️ Ainda não sincronizou — verifique a internet');}}).catch(function(){toast('⚠️ Ainda não sincronizou');});}
+function finishReportSave(okMsg,afterFn){try{localStorage.setItem(LS_KEY,JSON.stringify(STATE));}catch(e){}clearTimeout(_cloudTimer);if(!(sbClient&&CLOUD_READY)){reportSyncWarn();return;}toast('⏳ Salvando na nuvem…');Promise.resolve().then(function(){return cloudSave();}).then(function(ok){if(ok){toast(okMsg);if(typeof afterFn==='function')afterFn();}else{reportSyncWarn();}}).catch(function(){reportSyncWarn();});}
 function mergeState(raw){const b=blank();const s=Object.assign(b,raw||{});s.patches=s.patches||[];return s;}
 async function loadCloud(){if(!sbClient)return;try{const r=await sbClient.from('app_state').select('data').eq('id',1).single();if(r.error){console.warn('loadCloud',r.error.message);return;}const raw=r.data&&r.data.data;const empty=!(raw&&Object.keys(raw).length);if(!empty){try{STATE=mergeStatesForSave(mergeState(raw),STATE);}catch(e){STATE=mergeState(raw);}}try{applyPatches(STATE);}catch(e){}if(empty){try{migrateForCloud();}catch(e){}}try{applyClassMeta();}catch(e){}try{syncAdded();}catch(e){}cloudSave();}catch(e){console.warn(e);}}
 /* When a remote update arrives while the user is busy editing, we defer the re-render and flush it
@@ -1068,7 +1076,7 @@ function saveEdit(id,i){try{
  if(fl&&$("#e_slot"))s.slot=$v('e_slot');
  const ph=c.track==='phonics';
  const rows={};names.forEach((n,k)=>{if(fl){rows[n]={att:$v('eatt_'+k)||'Present',obs:$v('eobs_'+k)};}else{const row={att:$v('eatt_'+k)||'Present',hw:$v('ehw_'+k),dollar:c.kidDollar?(Number($v('edol_'+k))||0):0,obs:$v('eobs_'+k)};if(ph&&$("#ephon_"+k)){row.phon=$v('ephon_'+k);row.phsk=readPhonSkills('ephon',k);}rows[n]=row;}});
- s.rows=(c.special==='cambridge')?Object.assign({},s.rows||{},rows):rows;save();REPORT_DIRTY=false;toast('✅ Report updated');EDIT_IDX=null;renderClass(id);
+ s.rows=(c.special==='cambridge')?Object.assign({},s.rows||{},rows):rows;REPORT_DIRTY=false;finishReportSave('✅ Report updated & synced',function(){EDIT_IDX=null;renderClass(id);});
 }catch(err){toast('⚠️ Could not save the changes: '+(err&&err.message||err));}}
 
 /* ============================================================ FLUENT STEPS (Monday club, by time slot) ============================================================ */
@@ -1149,7 +1157,7 @@ function saveFluentReport(id){try{
  if(missing.length){toast('✍️ Please write an observation for: '+missing.map(n=>displayName(id,n)).join(', '));return;}
  const entry={date:$v('fr_date')||recentMonday(),slot,theme:$v('fr_theme'),high:$v('fr_high'),improve:$v('fr_improve'),rows:{}};
  roster.forEach(n=>{const d=FLUENT_DRAFT[n]||{};entry.rows[n]={att:d.att||'Present',obs:d.obs||''};});
- (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);FLUENT_DRAFT={};save();REPORT_DIRTY=false;toast("✅ Class report saved");setTab('overview',id);
+ upsertSession(id,entry);FLUENT_DRAFT={};REPORT_DIRTY=false;finishReportSave("✅ Class report saved & synced",function(){setTab('overview',id);});
 }catch(err){toast('⚠️ Could not save: '+(err&&err.message||err));}}
 function fluentStudents(id){
  const c=getClass(id);
@@ -1350,7 +1358,7 @@ function cambSaveReport(id){try{
  const lvl=CAMB_LEVEL;const roster=cambActive(lvl).filter(n=>!cambClosed(n));const $v=k=>{const e=$("#"+k);return e?(e.value||''):'';};
  const entry={date:$v('r_date')||todayISO(),level:lvl,theme:$v('r_theme'),paper:$v('r_paper'),high:$v('r_high'),improve:$v('r_improve'),rows:{}};
  roster.forEach((n,i)=>{entry.rows[n]={att:$v('att_'+i)||'Present',hw:$v('hw_'+i),obs:$v('obs_'+i)};});
- (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();REPORT_DIRTY=false;toast("✅ Lesson saved");setTab('overview',id);
+ upsertSession(id,entry);REPORT_DIRTY=false;finishReportSave("✅ Lesson saved & synced",function(){setTab('overview',id);});
 }catch(err){toast('⚠️ Could not save: '+(err&&err.message||err));}}
 /* Move a Cambridge report between exam levels (Starters/Movers/Flyers/B1) — only within Cambridge. */
 function cambMoveReportModal(id,i){const s=sessionsOf(id)[i];if(!s)return;const ex=document.getElementById('cmmodal');if(ex)ex.remove();
@@ -1580,7 +1588,7 @@ function saveReport(id){try{
  }
  const entry={date:$v('r_date')||todayISO(),theme:$v('r_theme'),periodIdx:idx,period:idx!=null?items[idx]:'',high:$v('r_high'),improve:$v('r_improve'),rows:{}};
  activeStudents(c).forEach((n,i)=>{const row={att:$v('att_'+i)||'Present',hw:$v('hw_'+i),dollar:c.kidDollar?(Number($v('dol_'+i))||0):0,obs:$v('obs_'+i)};if(c.track==='phonics'&&$("#phon_"+i)){row.phon=$v('phon_'+i);row.phsk=readPhonSkills('phon',i);}entry.rows[n]=row;});
- (STATE.sessions[id]=STATE.sessions[id]||[]).push(entry);save();REPORT_DIRTY=false;toast("✅ Daily report saved");setTab('overview',id);
+ upsertSession(id,entry);REPORT_DIRTY=false;finishReportSave("✅ Daily report saved & synced",function(){setTab('overview',id);});
 }catch(err){toast('⚠️ Could not save the report: '+(err&&err.message||err));}}
 /* ===== Personalized daily report — exclusive/reinforcement lesson for one child,
    optionally pulling the Skills & Competencies framework of another class (the book that child follows). ===== */
