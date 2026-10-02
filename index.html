@@ -2780,8 +2780,12 @@ function showCoordWatchAlert(){
  var w=document.createElement('div');w.id='watchpop';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
  w.innerHTML='<div class="od-box" style="border-color:var(--bad);max-width:560px;text-align:left"><div class="od-ico">🔔</div><h2 style="color:var(--bad)">Children to watch</h2>'+
   '<p><b>'+uniq+'</b> child(ren) flagged: 📚 '+d.hw.length+' homework · 🚫 '+d.ab.length+' absences · 📝 '+d.lt.length+' low tests.</p>'+
-  list(d.ab,'🚫',3)+list(d.hw,'📚',3)+list(d.lt,'📝',3)+
-  '<div style="margin-top:10px"><button class="btn navy" onclick="var x=document.getElementById(\'watchpop\');if(x)x.remove();setCoordTab(\'watch\');">📋 See full report</button> <button class="btn ghost" onclick="var x=document.getElementById(\'watchpop\');if(x)x.remove();">Dismiss</button></div></div>';
+  '<div id="watchscroll" style="max-height:46vh;overflow-y:auto;padding-right:4px">'+list(d.ab,'🚫',8)+list(d.hw,'📚',8)+list(d.lt,'📝',8)+'</div>'+
+  '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+   '<button class="btn ghost sm" title="Subir" onclick="var s=document.getElementById(\'watchscroll\');if(s)s.scrollBy({top:-200,behavior:\'smooth\'});">⬆️</button>'+
+   '<button class="btn ghost sm" title="Descer" onclick="var s=document.getElementById(\'watchscroll\');if(s)s.scrollBy({top:200,behavior:\'smooth\'});">⬇️</button>'+
+   '<button class="btn navy" onclick="var x=document.getElementById(\'watchpop\');if(x)x.remove();setCoordTab(\'watch\');">📋 See full report</button>'+
+   '<button class="btn ghost" onclick="var x=document.getElementById(\'watchpop\');if(x)x.remove();">Dismiss</button></div></div>';
  document.body.appendChild(w);
  return true;
 }
