@@ -2567,7 +2567,7 @@ function renderCoord(){
  const totalPend=CLASSES.reduce((a,c)=>a+pendingFor(c.id,'coord').length,0);
  if(!TRIALS_LOADED&&!TRIALS_LOADING)loadTrials();
  startTrialsPolling();
- const bt=birthdaysToday().length;const fc=coordPendingActions().length;const nt=newTrialsCount();const tabs=[['overview','📊 Class Performance'],['teachers','⏰ Teacher Compliance'],['attention','🔎 Children to Watch'],['follow','🚦 Follow-ups'+(fc?` (${fc})`:'')],['reports','📄 Progress Reports'],['messages','✉️ Messages'+(totalPend?` (${totalPend})`:'')],['birthdays','👧 Students/Birthdays'+(bt?` (${bt})`:'')],['trials','🎒 Trial Classes'+(nt?` (${nt})`:'')],['skills','🎯 Skills & Competencies'],['structure','🏗 Structural Organization']];
+ const bt=birthdaysToday().length;const fc=coordPendingActions().length;const nt=newTrialsCount();const tabs=[['overview','📊 Class Performance'],['teachers','⏰ Teacher Compliance'],['attention','🔎 Children to Watch'],['watch','📋 Watch Report'],['follow','🚦 Follow-ups'+(fc?` (${fc})`:'')],['reports','📄 Progress Reports'],['messages','✉️ Messages'+(totalPend?` (${totalPend})`:'')],['birthdays','👧 Students/Birthdays'+(bt?` (${bt})`:'')],['trials','🎒 Trial Classes'+(nt?` (${nt})`:'')],['skills','🎯 Skills & Competencies'],['structure','🏗 Structural Organization']];
  app().innerHTML=`<div class="page-head"><button class="back" onclick="go('home')">← Home</button>
    <div><h2>🧭 Coordination Dashboard</h2><div class="sub">Full pedagogical oversight · ${CLASSES.filter(c=>c.count).length} classes · ${countedStudents()} students</div></div></div>
   <div class="tabs">${tabs.map(t=>`<button class="tab ${COORD_TAB===t[0]?'active':''}" onclick="setCoordTab('${t[0]}')">${t[1]}</button>`).join('')}</div>
@@ -2578,6 +2578,7 @@ function renderCoord(){
  if(COORD_TAB==='overview')coordOverview(b);
  else if(COORD_TAB==='teachers')b.innerHTML=coordTeachers();
  else if(COORD_TAB==='attention')b.innerHTML=coordAttention();
+ else if(COORD_TAB==='watch')b.innerHTML=coordWatchReport();
  else if(COORD_TAB==='follow')b.innerHTML=coordActionsPanel();
  else if(COORD_TAB==='reports'){b.innerHTML=coordReports();if(!RPT.cid){fillRptStudents();fillRptStudentsP();}}
  else if(COORD_TAB==='messages')b.innerHTML=coordMessages();
@@ -2585,7 +2586,7 @@ function renderCoord(){
  else if(COORD_TAB==='trials')b.innerHTML=coordTrials();
  else if(COORD_TAB==='skills')b.innerHTML=coordSkills();
  else if(COORD_TAB==='structure')b.innerHTML=coordStructure();
- if(!COORD_ACT_POPPED){COORD_ACT_POPPED=true;setTimeout(function(){try{if(!showLateReportsPopup())showCoordActionsPopup();}catch(e){}},80);}
+ if(!COORD_ACT_POPPED){COORD_ACT_POPPED=true;setTimeout(function(){try{if(!showCoordWatchAlert()){if(!showLateReportsPopup())showCoordActionsPopup();}}catch(e){}},80);}
 }
 function coordBirthdays(){
  const list=allBirthdays().sort((a,b)=>(a.days==null?999:a.days)-(b.days==null?999:b.days));
@@ -2738,6 +2739,52 @@ function coordTeachers(){
      </table></div></div></div>`).join('')}</div>`+teacherTodoPanel();
 }
 
+/* ===== Attention report: homework not being done, absence patterns (3+ in a row or 4+ total),
+   and low unit-test scores (below 80% of the max). Read-only: computed live, nothing is written. ===== */
+function _absInfo(id,name){var ss=sessionsOf(id).slice().sort(function(a,b){return String(a.date||'').localeCompare(String(b.date||''));});var total=0,run=0,mx=0;ss.forEach(function(s){var r=(s.rows||{})[name];if(!r)return;if(r.att==='Absent'){total++;run++;if(run>mx)mx=run;}else if(r.att==='Present'||r.att==='Late'){run=0;}});return {total:total,maxRun:mx,flag:(mx>=3||total>=4)};}
+function _hwInfo(id,name){var st=studentStats(id,name);return {rate:st.hwRate,missed:st.hm,done:st.hd,flag:(st.hwRate!=null&&st.hwRate<60&&(st.hd+st.hm)>=2)};}
+function _ltInfo(id,name){var c=getClass(id);var mx=testMaxFor(c);var thr=mx?mx*0.8:15;var t=STATE.tests[id]||{};var hits=[];Object.entries(t).forEach(function(e){var u=e[0];(e[1]||[]).forEach(function(r){if(r.student===name&&r.score!=null&&Number(r.score)<thr)hits.push({u:u,score:r.score,max:mx});});});return {hits:hits,flag:hits.length>0};}
+function watchReportData(){var hw=[],ab=[],lt=[];CLASSES.forEach(function(c){if(c.fluent||c.special==='cambridge')return;activeStudents(c).forEach(function(n){var dn=displayName(c.id,n);var cls=c.name+' '+c.time;var h=_hwInfo(c.id,n);if(h.flag)hw.push({cid:c.id,name:n,dn:dn,cls:cls,teacher:c.teacher,rate:h.rate,missed:h.missed});var a=_absInfo(c.id,n);if(a.flag)ab.push({cid:c.id,name:n,dn:dn,cls:cls,teacher:c.teacher,total:a.total,maxRun:a.maxRun});var l=_ltInfo(c.id,n);if(l.flag)lt.push({cid:c.id,name:n,dn:dn,cls:cls,teacher:c.teacher,hits:l.hits});});});return {hw:hw,ab:ab,lt:lt};}
+function watchUniqueCount(d){var s={};[].concat(d.hw,d.ab,d.lt).forEach(function(r){s[r.cid+'::'+r.name]=1;});return Object.keys(s).length;}
+function coordWatchReport(){
+ var d=watchReportData();var uniq=watchUniqueCount(d);
+ function sec(title,emoji,color,rows,detail){
+  return '<div class="card" style="border-color:'+color+'"><h3>'+emoji+' '+title+' <span class="muted small">('+rows.length+')</span></h3>'+
+   (rows.length?('<div class="tbl-wrap"><table><tr><th>Child</th><th>Class</th><th>Teacher</th><th>Detail</th><th class="no-print"></th></tr>'+
+    rows.map(function(r){var ns=esc(r.name).replace(/'/g,"\\'");return '<tr><td><b>'+esc(r.dn)+'</b></td><td>'+esc(r.cls)+'</td><td>'+esc(r.teacher)+'</td><td>'+detail(r)+'</td><td class="no-print" style="white-space:nowrap"><button class="btn ghost sm" onclick="openReport(\''+r.cid+'\',\''+ns+'\')">📄 Report</button> <button class="btn ghost sm" onclick="showFullHistory(\''+r.cid+'\',\''+ns+'\')">📜 History</button></td></tr>';}).join('')+'</table></div>')
+    :'<p class="muted small">Ninguém neste tópico. 🎉</p>')+'</div>';
+ }
+ return '<div class="card" style="border-color:var(--navy)"><h3>📋 Attention Report — who to watch</h3>'+
+   '<p class="hint">Consolidated across all classes, live from the logged data: homework not being done, absence patterns (3+ in a row or 4+ total), and low unit-test scores (below 80% of the max). <b>'+uniq+'</b> child(ren) flagged in total.</p>'+
+   '<div class="no-print"><button class="btn navy" onclick="printWatchReport()">🖨 Print / Save PDF</button></div></div>'+
+   sec('Homework not being done','📚','#E67E22',d.hw,function(r){return 'Homework '+(r.rate==null?'—':r.rate+'%')+' · '+r.missed+' not done';})+
+   sec('Absences (3+ in a row or 4+ total)','🚫','#C0392B',d.ab,function(r){return r.total+' absence(s)'+(r.maxRun>=3?' · '+r.maxRun+' in a row':'');})+
+   sec('Low unit-test scores','📝','#8E44AD',d.lt,function(r){return r.hits.map(function(h){return 'Unit '+h.u+': '+h.score+(h.max?'/'+h.max:'');}).join(' · ');});
+}
+function printWatchReport(){
+ var d=watchReportData();
+ function tbl(title,rows,detail){return '<h2>'+title+' ('+rows.length+')</h2>'+(rows.length?('<table><tr><th>Child</th><th>Class</th><th>Teacher</th><th>Detail</th></tr>'+rows.map(function(r){return '<tr><td>'+esc(r.dn)+'</td><td>'+esc(r.cls)+'</td><td>'+esc(r.teacher)+'</td><td>'+detail(r)+'</td></tr>';}).join('')+'</table>'):'<p>—</p>');}
+ var html='<h1>📋 Attention Report — Kids Garden</h1><div>'+esc(todayISO())+'</div>'+
+   tbl('📚 Homework not being done',d.hw,function(r){return 'Homework '+(r.rate==null?'—':r.rate+'%')+' · '+r.missed+' not done';})+
+   tbl('🚫 Absences (3+ in a row or 4+ total)',d.ab,function(r){return r.total+' absence(s)'+(r.maxRun>=3?' · '+r.maxRun+' in a row':'');})+
+   tbl('📝 Low unit-test scores',d.lt,function(r){return r.hits.map(function(h){return 'Unit '+h.u+': '+h.score+(h.max?'/'+h.max:'');}).join(' · ');});
+ var css='<style>body{font-family:Arial,sans-serif;color:#042342;padding:24px}h1{color:#2C6FB0;margin:0 0 4px}h2{margin:18px 0 6px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #ccc;padding:6px;text-align:left}th{background:#eef3fb}</style>';
+ var w=window.open('','_blank');if(!w){toast('Please allow pop-ups to print');return;}w.document.write('<html><head><meta charset="utf-8"><title>Attention Report</title>'+css+'</head><body>'+html+'</body></html>');w.document.close();setTimeout(function(){try{w.focus();w.print();}catch(e){}},350);
+}
+function showCoordWatchAlert(){
+ if(!COORD_OK||VIEW.name!=='coord')return false;
+ var d=watchReportData();var uniq=watchUniqueCount(d);
+ if(uniq===0)return false;
+ var ex=document.getElementById('watchpop');if(ex)ex.remove();
+ function list(rows,emoji,n){return rows.slice(0,n).map(function(r){var ns=esc(r.name).replace(/'/g,"\\'");return '<div class="flag warn" style="text-align:left;margin-top:6px"><span class="fi">'+emoji+'</span><div><b>'+esc(r.dn)+'</b> · '+esc(r.cls)+' <button class="btn ghost sm" style="margin-left:6px" onclick="var x=document.getElementById(\'watchpop\');if(x)x.remove();showFullHistory(\''+r.cid+'\',\''+ns+'\');">📜 History</button></div></div>';}).join('');}
+ var w=document.createElement('div');w.id='watchpop';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
+ w.innerHTML='<div class="od-box" style="border-color:var(--bad);max-width:560px;text-align:left"><div class="od-ico">🔔</div><h2 style="color:var(--bad)">Children to watch</h2>'+
+  '<p><b>'+uniq+'</b> child(ren) flagged: 📚 '+d.hw.length+' homework · 🚫 '+d.ab.length+' absences · 📝 '+d.lt.length+' low tests.</p>'+
+  list(d.ab,'🚫',3)+list(d.hw,'📚',3)+list(d.lt,'📝',3)+
+  '<div style="margin-top:10px"><button class="btn navy" onclick="var x=document.getElementById(\'watchpop\');if(x)x.remove();setCoordTab(\'watch\');">📋 See full report</button> <button class="btn ghost" onclick="var x=document.getElementById(\'watchpop\');if(x)x.remove();">Dismiss</button></div></div>';
+ document.body.appendChild(w);
+ return true;
+}
 function coordAttention(){
  const all=[];CLASSES.forEach(c=>attentionList(c.id).forEach(a=>all.push({...a,c})));
  if(!all.length)return `<div class="card"><div class="flag ok"><span class="fi">🎉</span><div><b>No children flagged right now.</b> As teachers log attendance, homework and skills, anyone needing support will appear here automatically — with the reason.</div></div></div>`;
