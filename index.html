@@ -541,7 +541,12 @@ async function cloudSave(){if(!sbClient)return false;try{
  var merged=base?mergeStatesForSave(base,STATE):STATE;
  STATE=merged;try{applyClassMeta();}catch(e){}
  var w=await sbClient.from('app_state').update({data:merged,updated_at:new Date().toISOString(),updated_by:CURRENT_EMAIL}).eq('id',1);
- if(w&&w.error){console.warn('cloudSave',w.error.message);return false;}
+ if(w&&w.error){
+   /* The session may have expired (token stale) — refresh it once and retry, so a save isn't lost silently. */
+   try{await sbClient.auth.refreshSession();}catch(e){}
+   var w2=await sbClient.from('app_state').update({data:merged,updated_at:new Date().toISOString(),updated_by:CURRENT_EMAIL}).eq('id',1);
+   if(w2&&w2.error){console.warn('cloudSave',w2.error.message);return false;}
+ }
  return true;
 }catch(e){console.warn('cloudSave',e&&e.message||e);return false;}}
 /* A daily report is only truly saved once it reaches the cloud. These helpers save locally, push to the
@@ -551,6 +556,13 @@ function upsertSession(id,entry){STATE.sessions=STATE.sessions||{};STATE.session
 function reportSyncWarn(){var ex=document.getElementById('syncwarn');if(ex)ex.remove();var w=document.createElement('div');w.id='syncwarn';w.className='od-overlay';w.style.background='rgba(4,35,66,.5)';w.innerHTML='<div class="od-box" style="border-color:var(--bad);max-width:470px"><div class="od-ico">⚠️</div><h2 style="color:var(--bad)">Não sincronizou com a nuvem</h2><p>O relatório foi salvo <b>neste aparelho</b>, mas <b>ainda não chegou na nuvem</b> — então a coordenação e os outros ainda não veem.</p><p class="od-sub">Verifique a internet e clique em <b>Tentar sincronizar agora</b>. <b>Não feche a tela</b> até aparecer "sincronizado".</p><div style="margin-top:8px"><button class="btn navy" onclick="retryCloudSave()">🔄 Tentar sincronizar agora</button> <button class="btn ghost" onclick="var x=document.getElementById(\'syncwarn\');if(x)x.remove();">Fechar</button></div></div>';document.body.appendChild(w);}
 function retryCloudSave(){toast('⏳ Sincronizando…');Promise.resolve().then(function(){return cloudSave();}).then(function(ok){if(ok){var x=document.getElementById('syncwarn');if(x)x.remove();toast('✅ Sincronizado com a nuvem');try{render();}catch(e){}}else{toast('⚠️ Ainda não sincronizou — verifique a internet');}}).catch(function(){toast('⚠️ Ainda não sincronizou');});}
 function finishReportSave(okMsg,afterFn){try{localStorage.setItem(LS_KEY,JSON.stringify(STATE));}catch(e){}clearTimeout(_cloudTimer);if(!(sbClient&&CLOUD_READY)){reportSyncWarn();return;}toast('⏳ Salvando na nuvem…');Promise.resolve().then(function(){return cloudSave();}).then(function(ok){if(ok){toast(okMsg);if(typeof afterFn==='function')afterFn();}else{reportSyncWarn();}}).catch(function(){reportSyncWarn();});}
+/* Save + CONFIRM the cloud write for coordination/skills content (projects, units, assessments).
+   Shows success only AFTER the change actually reaches the cloud; warns (with a retry) if it didn't —
+   so a publish or an assessment is never silently lost by an expired session or a connection blip. */
+function saveConfirmed(okMsg){try{localStorage.setItem(LS_KEY,JSON.stringify(STATE));}catch(e){}clearTimeout(_cloudTimer);
+ if(!(sbClient&&CLOUD_READY)){toast(okMsg);return;}
+ toast('⏳ Salvando na nuvem…');
+ Promise.resolve().then(function(){return cloudSave();}).then(function(ok){if(ok){toast(okMsg);}else{reportSyncWarn();}}).catch(function(){reportSyncWarn();});}
 function mergeState(raw){const b=blank();const s=Object.assign(b,raw||{});s.patches=s.patches||[];return s;}
 async function loadCloud(){if(!sbClient)return;try{const r=await sbClient.from('app_state').select('data').eq('id',1).single();if(r.error){console.warn('loadCloud',r.error.message);return;}const raw=r.data&&r.data.data;const empty=!(raw&&Object.keys(raw).length);if(!empty){try{STATE=mergeStatesForSave(mergeState(raw),STATE);}catch(e){STATE=mergeState(raw);}}try{applyPatches(STATE);}catch(e){}if(empty){try{migrateForCloud();}catch(e){}}try{applyClassMeta();}catch(e){}try{syncAdded();}catch(e){}cloudSave();}catch(e){console.warn(e);}}
 /* ===== Auto-pull: keep every machine up to date without a manual refresh =====
@@ -1832,13 +1844,25 @@ function tabSkillsNursery(id){
 function setNurseryProj(i,id){NURSERY_PROJ=i;renderClass(id);}
 function setKinderProj(i,id){KINDER_PROJ=i;renderClass(id);}
 function kinderProjectCard(id){
- if(KINDER_PROJ>=KINDER_PROJECTS.length)KINDER_PROJ=0;
- const sel=KINDER_PROJECTS[KINDER_PROJ];
- const btns=KINDER_PROJECTS.map((p,i)=>{const tag=p.status==='current'?' · now':p.status==='done'?' · done':' · soon';return `<button class="unit-tab ${i===KINDER_PROJ?'active':''} ${p.status==='current'?'done':''}" onclick="setKinderProj(${i},'${id}')">${p.emoji} ${esc(p.name)}<span class="muted small" style="font-weight:600">${tag}</span></button>`;}).join('');
+ /* Show the REAL projects: the built-in ones that have content (e.g. Birds, with its rich competencies
+    and 9-lesson plan) PLUS the projects coordination created in Skills & Competencies (e.g. Zoo animals,
+    Insects) — replacing the old generic "Project 2 / Project 3" placeholders. Coordination projects that
+    repeat a built-in name are skipped so nothing shows twice; per-child assessments stay keyed by project
+    name, so no history is touched. */
+ const c=getClass(id);
+ const builtin=KINDER_PROJECTS.filter(function(p){return p&&p.comp&&Object.keys(p.comp).length;});
+ const _bn={};builtin.forEach(function(p){_bn[(p.name||'').toLowerCase()]=1;});
+ const extra=(c?projectsByKey(c.name):[]).filter(function(p){return p&&!_bn[(p.name||'').toLowerCase()];});
+ const projList=builtin.concat(extra);
+ if(!projList.length)return '';
+ if(KINDER_PROJ>=projList.length||KINDER_PROJ<0)KINDER_PROJ=0;
+ const sel=projList[KINDER_PROJ];
+ const btns=projList.map((p,i)=>{const tag=p.status==='current'?' · now':p.status==='done'?' · done':'';return `<button class="unit-tab ${i===KINDER_PROJ?'active':''} ${p.status==='current'?'done':''}" onclick="setKinderProj(${i},'${id}')">${p.emoji||'📘'} ${esc(p.name)}<span class="muted small" style="font-weight:600">${tag}</span></button>`;}).join('');
  let body;
- if(sel.comp&&Object.keys(sel.comp).length){
+ const hasComp=sel.comp&&Object.keys(sel.comp).length;const hasSkills=sel.skills&&sel.skills.length;
+ if(hasComp||hasSkills){
    const objs=(sel.objectives&&sel.objectives.length)?`<div class="flag ok"><span class="fi">🎯</span><div><b>By the end of the ${esc(sel.name)} project, children will be able to:</b><ul style="margin:6px 0 0 18px">${sel.objectives.map(o=>`<li>${esc(o)}</li>`).join('')}</ul></div></div>`:'';
-   const comp=Object.entries(sel.comp).map(([k,v])=>`<div class="comp"><h5>${esc(k)}</h5><ul>${v.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
+   const comp=hasComp?Object.entries(sel.comp).map(([k,v])=>`<div class="comp"><h5>${esc(k)}</h5><ul>${v.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join(''):`<div class="comp"><ul style="margin:4px 0 0 18px">${sel.skills.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
    const stu=activeStudents(getClass(id));const pk='proj:'+sel.name;const ud=(STATE.skills[id]||{})[pk]||{};
    const ASSESS=["Listening","Speaking","Project knowledge","Literacy and numeracy","Motor and focus"];
    const assess=stu.length?`<div class="card" style="box-shadow:none;border:1px dashed var(--line);background:var(--soft);margin:14px 0 0"><h3 style="font-size:15px">🎯 Assess each child</h3><p class="hint">Rate each child on the <b>${esc(sel.name)}</b> project: <b>Developing → Proficient</b>. Ratings save as you change them and feed the child's progress report.</p><div class="tbl-wrap"><table><tr><th>Child</th>${ASSESS.map(s=>`<th>${esc(s)}</th>`).join('')}</tr>${stu.map((n,si)=>{const sr=ud[n]||{};return `<tr><td><b>${esc(displayName(id,n))}</b></td>${ASSESS.map(s=>{const v=sr[s]||'Not assessed';return `<td><select class="att-sel" onchange="setSkill('${id}','${pk}',${si},'${esc(s)}',this.value)">${RATING.map(r=>`<option ${r===v?'selected':''}>${r}</option>`).join('')}</select></td>`;}).join('')}</tr>`;}).join('')}</table></div><div class="no-print" style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn" onclick="saveAssessment('${id}','Assessment')">💾 Save assessment</button> <span class="muted small">Saves as you change them; click to confirm — shows in the student report.</span></div></div>`:`<div class="flag warn" style="margin:14px 0 0"><span class="fi">👧</span><div>Add students to this class to assess them on the project.</div></div>`;
@@ -1883,7 +1907,7 @@ function setPeriod(i,id){CUR_PERIOD=i;renderClass(id);}
 function setSkill(id,period,si,skill,val){const name=activeStudents(getClass(id))[si];
  STATE.skills[id]=STATE.skills[id]||{};STATE.skills[id][period]=STATE.skills[id][period]||{};
  STATE.skills[id][period][name]=STATE.skills[id][period][name]||{};STATE.skills[id][period][name][skill]=val;save();}
-function saveAssessment(id,label){try{const a=document.activeElement;if(a&&a.blur)a.blur();}catch(e){}save();toast('✅ '+(label||'Assessment')+' saved — now showing in the student report');}
+function saveAssessment(id,label){try{const a=document.activeElement;if(a&&a.blur)a.blur();}catch(e){}saveConfirmed('✅ '+(label||'Assessment')+' saved & synced — now in the student report');}
 
 /* TESTS / MOCK TESTS */
 function tabTests(id){
@@ -2338,7 +2362,7 @@ function renderProjectModal(){if(!PJ_DRAFT)return;const d=PJ_DRAFT;const ex=docu
 function pjDraftAdd(){if(!PJ_DRAFT)return;pjSyncName();const el=$("#pj_new");const v=el?String(el.value).trim():'';if(!v)return;PJ_DRAFT.skills.push(v);renderProjectModal();}
 function pjDraftEdit(i){if(!PJ_DRAFT)return;pjSyncName();const v=prompt('Edit skill / competency:',PJ_DRAFT.skills[i]);if(v!==null){const t=String(v).trim();if(t)PJ_DRAFT.skills[i]=t;else PJ_DRAFT.skills.splice(i,1);}renderProjectModal();}
 function pjDraftDel(i){if(!PJ_DRAFT)return;pjSyncName();PJ_DRAFT.skills.splice(i,1);renderProjectModal();}
-function pjDraftSave(){if(!PJ_DRAFT)return;pjSyncName();const d=PJ_DRAFT;const name=String(d.name||'').trim();if(!name){toast('✍️ Give the project a name');return;}STATE.projects=STATE.projects||{};STATE.projects[d.lvl]=STATE.projects[d.lvl]||[];if(d.pid){var _f=false;Object.keys(STATE.projects).forEach(function(k){var p=(STATE.projects[k]||[]).find(function(x){return x.id===d.pid;});if(p){p.name=name;p.skills=d.skills;_f=true;}});if(!_f)STATE.projects[d.lvl].push({id:d.pid,name:name,skills:d.skills});}else{STATE.projects[d.lvl].push({id:'pj_'+Math.random().toString(36).slice(2,9),name:name,skills:d.skills});}save();PJ_DRAFT=null;const m=document.getElementById('pjmodal');if(m)m.remove();toast('✅ Project published');renderCoord();}
+function pjDraftSave(){if(!PJ_DRAFT)return;pjSyncName();const d=PJ_DRAFT;const name=String(d.name||'').trim();if(!name){toast('✍️ Give the project a name');return;}STATE.projects=STATE.projects||{};STATE.projects[d.lvl]=STATE.projects[d.lvl]||[];if(d.pid){var _f=false;Object.keys(STATE.projects).forEach(function(k){var p=(STATE.projects[k]||[]).find(function(x){return x.id===d.pid;});if(p){p.name=name;p.skills=d.skills;_f=true;}});if(!_f)STATE.projects[d.lvl].push({id:d.pid,name:name,skills:d.skills});}else{STATE.projects[d.lvl].push({id:'pj_'+Math.random().toString(36).slice(2,9),name:name,skills:d.skills});}PJ_DRAFT=null;const m=document.getElementById('pjmodal');if(m)m.remove();renderCoord();saveConfirmed('✅ Project published & synced');}
 function deleteProject(lvl,pid){if(!confirm('Delete this project and its skills?'))return;STATE.projects=STATE.projects||{};Object.keys(STATE.projects).forEach(function(k){STATE.projects[k]=(STATE.projects[k]||[]).filter(function(x){return x.id!==pid;});});save();toast('🗑 Project deleted');renderCoord();}
 /* Units added by coordination (K1+ only), competencies organised by skill. Pre-formatted units are never touched. */
 function levelUnits(lvl){STATE.unitsAdd=STATE.unitsAdd||{};return STATE.unitsAdd[lvl]||[];}
@@ -2363,7 +2387,7 @@ function renderUnitModal(){if(!UN_DRAFT)return;const d=UN_DRAFT;d.pending=d.pend
 function unDraftAdd(idx){if(!UN_DRAFT)return;addUnitModalPending();const s=(unitSkillsFor(UN_DRAFT.lvl))[idx];if(!s)return;const v=String((UN_DRAFT.pending&&UN_DRAFT.pending[s])||'').trim();if(!v)return;UN_DRAFT.byskill[s]=UN_DRAFT.byskill[s]||[];UN_DRAFT.byskill[s].push(v);if(UN_DRAFT.pending)UN_DRAFT.pending[s]='';renderUnitModal();}
 function unDraftEdit(idx,i){if(!UN_DRAFT)return;addUnitModalPending();const s=(unitSkillsFor(UN_DRAFT.lvl))[idx];if(!s)return;const arr=UN_DRAFT.byskill[s]||[];const v=prompt('Edit competency:',arr[i]);if(v!==null){const t=String(v).trim();if(t)arr[i]=t;else arr.splice(i,1);}renderUnitModal();}
 function unDraftDel(idx,i){if(!UN_DRAFT)return;addUnitModalPending();const s=(unitSkillsFor(UN_DRAFT.lvl))[idx];if(!s)return;(UN_DRAFT.byskill[s]||[]).splice(i,1);renderUnitModal();}
-function unDraftSave(){if(!UN_DRAFT)return;addUnitModalPending();const d=UN_DRAFT;unitSkillsFor(d.lvl).forEach(s=>{const t=String((d.pending&&d.pending[s])||'').trim();if(t){d.byskill[s]=d.byskill[s]||[];d.byskill[s].push(t);}});const name='Unit '+d.unit;const byskill={};Object.keys(d.byskill).forEach(s=>{if(d.byskill[s]&&d.byskill[s].length)byskill[s]=d.byskill[s];});STATE.unitsAdd=STATE.unitsAdd||{};STATE.unitsAdd[d.lvl]=STATE.unitsAdd[d.lvl]||[];if(d.uid){const u=STATE.unitsAdd[d.lvl].find(x=>x.id===d.uid);if(u){u.unit=d.unit;u.name=name;u.byskill=byskill;}}else{STATE.unitsAdd[d.lvl].push({id:'un_'+Math.random().toString(36).slice(2,9),unit:d.unit,name:name,byskill:byskill});}save();UN_DRAFT=null;const m=document.getElementById('unmodal');if(m)m.remove();toast('✅ Unit published');renderCoord();}
+function unDraftSave(){if(!UN_DRAFT)return;addUnitModalPending();const d=UN_DRAFT;unitSkillsFor(d.lvl).forEach(s=>{const t=String((d.pending&&d.pending[s])||'').trim();if(t){d.byskill[s]=d.byskill[s]||[];d.byskill[s].push(t);}});const name='Unit '+d.unit;const byskill={};Object.keys(d.byskill).forEach(s=>{if(d.byskill[s]&&d.byskill[s].length)byskill[s]=d.byskill[s];});STATE.unitsAdd=STATE.unitsAdd||{};STATE.unitsAdd[d.lvl]=STATE.unitsAdd[d.lvl]||[];if(d.uid){const u=STATE.unitsAdd[d.lvl].find(x=>x.id===d.uid);if(u){u.unit=d.unit;u.name=name;u.byskill=byskill;}}else{STATE.unitsAdd[d.lvl].push({id:'un_'+Math.random().toString(36).slice(2,9),unit:d.unit,name:name,byskill:byskill});}UN_DRAFT=null;const m=document.getElementById('unmodal');if(m)m.remove();renderCoord();saveConfirmed('✅ Unit published & synced');}
 function deleteUnit(lvl,uid){if(!confirm('Delete this unit and its competencies?'))return;STATE.unitsAdd=STATE.unitsAdd||{};STATE.unitsAdd[lvl]=(STATE.unitsAdd[lvl]||[]).filter(x=>x.id!==uid);save();toast('🗑 Unit deleted');renderCoord();}
 function coordStructure(){
  const rows=CLASSES.map(c=>{const L=LEVELS[c.level]||{};const custom=(STATE.customClasses||[]).some(x=>x.id===c.id);
