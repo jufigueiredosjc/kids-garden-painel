@@ -500,6 +500,16 @@ function _mSessions(a,b){var o={},c;for(c in a)o[c]=(a[c]||[]).slice();for(c in 
 function _mAdded(a,b){var o={},c;for(c in a)o[c]=(a[c]||[]).slice();for(c in b){o[c]=o[c]||[];(b[c]||[]).forEach(function(n){if(o[c].indexOf(n)<0)o[c].push(n);});}return o;}
 function _mById(a,b){var o=(a||[]).slice(),ix={};o.forEach(function(x,i){if(x&&x.id!=null)ix[x.id]=i;});(b||[]).forEach(function(x){if(x&&x.id!=null&&ix[x.id]!=null)o[ix[x.id]]=x;else o.push(x);});return o;}
 function _mUniq(a,b){var o=(a||[]).slice();(b||[]).forEach(function(x){if(o.indexOf(x)<0)o.push(x);});return o;}
+/* Coordination-published content (Projects & book Units) is stored as {levelOrClass:[items with id]}.
+   The default object merge lets the LOCAL array win the whole key, so a machine holding an OLDER local
+   copy would hide the newer skills a coordinator just published elsewhere (the bug where skills showed
+   for one person but not everyone). Instead: UNION by item id and keep the RICHER version (coordination
+   edits are additive), so new skills/units reach every machine and nothing is ever lost. */
+function _countC(x){if(!x)return 0;if(Array.isArray(x.skills))return x.skills.length;if(_isObj(x.byskill)){var n=0,s;for(s in x.byskill)n+=(x.byskill[s]||[]).length;return n;}return 0;}
+function _mPub(a,b){var o={},k;for(k in a)o[k]=(a[k]||[]).slice();
+ for(k in b){var arr=o[k]||(o[k]=[]);var ix={};arr.forEach(function(x,i){if(x&&x.id!=null)ix[x.id]=i;});
+  (b[k]||[]).forEach(function(x){if(x&&x.id!=null&&ix[x.id]!=null){var cur=arr[ix[x.id]];arr[ix[x.id]]=(_countC(x)>=_countC(cur))?x:cur;}else{arr.push(x);if(x&&x.id!=null)ix[x.id]=arr.length-1;}});}
+ return o;}
 /* Tombstones = deletion markers. They travel inside the merged state so a delete
    survives the union-merge (and propagates to everyone) instead of being re-added
    from the cloud copy. Without these, deleting anything would "come back". */
@@ -520,7 +530,9 @@ function applyTombstones(m){var T=m&&m.tombstones;if(!T)return m;var any=false,k
 function mergeStatesForSave(base,loc){var m={},k;for(k in base)m[k]=base[k];for(k in loc)if(!(k in m))m[k]=loc[k];
  m.sessions=_mSessions(base.sessions||{},loc.sessions||{});m.addedStudents=_mAdded(base.addedStudents||{},loc.addedStudents||{});
  m.customClasses=_mById(base.customClasses||[],loc.customClasses||[]);m.teacherTasks=_mById(base.teacherTasks||[],loc.teacherTasks||[]);m.taskLog=_mById(base.taskLog||[],loc.taskLog||[]);m.patches=_mUniq(base.patches||[],loc.patches||[]);
- ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','projects','unitsAdd','parentDevNote','aiReport','attnResolved'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
+ ['skills','tests','notes','messages','actions','dollarAdj','dollarAdjNote','classMeta','students','archived','fluent','camb','coordNotes','trials','parentDevNote','aiReport','attnResolved'].forEach(function(key){if(base[key]!==undefined||loc[key]!==undefined)m[key]=_mObj(base[key]||{},loc[key]||{});});
+ /* Projects & book Units: union-by-id, richer version wins (so coordination publishes reach everyone). */
+ m.projects=_mPub(base.projects||{},loc.projects||{});m.unitsAdd=_mPub(base.unitsAdd||{},loc.unitsAdd||{});
  m.tombstones=_mObj(base.tombstones||{},loc.tombstones||{});
  return applyTombstones(m);}
 async function cloudSave(){if(!sbClient)return false;try{
@@ -541,11 +553,34 @@ function retryCloudSave(){toast('⏳ Sincronizando…');Promise.resolve().then(f
 function finishReportSave(okMsg,afterFn){try{localStorage.setItem(LS_KEY,JSON.stringify(STATE));}catch(e){}clearTimeout(_cloudTimer);if(!(sbClient&&CLOUD_READY)){reportSyncWarn();return;}toast('⏳ Salvando na nuvem…');Promise.resolve().then(function(){return cloudSave();}).then(function(ok){if(ok){toast(okMsg);if(typeof afterFn==='function')afterFn();}else{reportSyncWarn();}}).catch(function(){reportSyncWarn();});}
 function mergeState(raw){const b=blank();const s=Object.assign(b,raw||{});s.patches=s.patches||[];return s;}
 async function loadCloud(){if(!sbClient)return;try{const r=await sbClient.from('app_state').select('data').eq('id',1).single();if(r.error){console.warn('loadCloud',r.error.message);return;}const raw=r.data&&r.data.data;const empty=!(raw&&Object.keys(raw).length);if(!empty){try{STATE=mergeStatesForSave(mergeState(raw),STATE);}catch(e){STATE=mergeState(raw);}}try{applyPatches(STATE);}catch(e){}if(empty){try{migrateForCloud();}catch(e){}}try{applyClassMeta();}catch(e){}try{syncAdded();}catch(e){}cloudSave();}catch(e){console.warn(e);}}
+/* ===== Auto-pull: keep every machine up to date without a manual refresh =====
+   Picks up coordination changes (skills, book units, reports) on its own. Runs ONLY when the user is not
+   mid-edit, so it never wipes a half-typed form, and first checks a tiny timestamp — it only downloads the
+   full state when something actually changed, keeping the load on the server minimal. Also covers the case
+   where the realtime channel silently dropped (e.g. after a connection blip). */
+let _lastPulledAt=null,_pullTimer=null;
+async function pullCloud(){if(!sbClient||!CLOUD_READY)return;
+ var ae=document.activeElement;
+ if(REPORT_DIRTY||(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))||document.querySelector('.od-overlay'))return;
+ try{
+  var h=await sbClient.from('app_state').select('updated_at').eq('id',1).single();
+  if(h.error||!h.data)return;var ua=h.data.updated_at;if(ua&&ua===_lastPulledAt)return;
+  var r=await sbClient.from('app_state').select('data,updated_at').eq('id',1).single();
+  if(r.error||!r.data||!r.data.data||!Object.keys(r.data.data).length)return;
+  _lastPulledAt=r.data.updated_at||_lastPulledAt;
+  var before=JSON.stringify([STATE.projects,STATE.unitsAdd,STATE.skills,STATE.sessions]);
+  try{STATE=mergeStatesForSave(r.data.data,STATE);}catch(e){return;}
+  try{applyClassMeta();}catch(e){}
+  if(JSON.stringify([STATE.projects,STATE.unitsAdd,STATE.skills,STATE.sessions])!==before)render();
+ }catch(e){}}
+function startAutoPull(){if(_pullTimer)return;
+ _pullTimer=setInterval(function(){if(!document.hidden)pullCloud();},120000);
+ document.addEventListener('visibilitychange',function(){if(!document.hidden)pullCloud();});}
 /* When a remote update arrives while the user is busy editing, we defer the re-render and flush it
    here a few seconds later, once they are no longer typing or in a form. Never disturbs active editing. */
 let CLOUD_PENDING_RENDER=false;
 try{setInterval(function(){if(!CLOUD_PENDING_RENDER)return;var ae=document.activeElement;var busy=REPORT_DIRTY||(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))||document.querySelector('.od-overlay');if(!busy){CLOUD_PENDING_RENDER=false;try{render();}catch(e){}}},3000);}catch(e){}
-function subscribeCloud(){if(!sbClient)return;try{sbClient.channel('app_state_rt').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state'},payload=>{const row=payload&&payload.new;if(row&&row.updated_by!==CURRENT_EMAIL&&row.data){
+function subscribeCloud(){if(!sbClient)return;try{sbClient.channel('app_state_rt').on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state'},payload=>{const row=payload&&payload.new;if(row&&row.updated_at)_lastPulledAt=row.updated_at;if(row&&row.updated_by!==CURRENT_EMAIL&&row.data){
   /* Merge the remote change INTO local (never replace) so in-progress local work is preserved. */
   try{STATE=mergeStatesForSave(row.data,STATE);}catch(e){STATE=mergeState(row.data);}
   try{applyClassMeta();}catch(e){}
@@ -589,7 +624,7 @@ async function doLogin(){if(!sbClient){toast('No connection to the cloud');retur
  if(res.error){const su=await sbClient.auth.signUp({email,password:pw});if(su.error){renderLogin('Incorrect password.');return;}}
  onLoggedIn(email,keep);}
 function onLoggedIn(email,keep){CURRENT_EMAIL=email;try{localStorage.setItem('kg.auth',JSON.stringify({email,until:Date.now()+864e5,keep:!!keep}));sessionStorage.setItem('kg.alive','1');}catch(e){}finishBoot();}
-async function finishBoot(){var _tb=document.getElementById('topbar');if(_tb)_tb.style.display='flex';toast('Loading...');await loadCloud();CLOUD_READY=true;subscribeCloud();try{startPresence();}catch(e){}go('home');}
+async function finishBoot(){var _tb=document.getElementById('topbar');if(_tb)_tb.style.display='flex';toast('Loading...');await loadCloud();CLOUD_READY=true;subscribeCloud();try{startAutoPull();}catch(e){}try{startPresence();}catch(e){}go('home');}
 async function doLogout(){try{stopPresence();}catch(e){}try{localStorage.removeItem('kg.auth');sessionStorage.removeItem('kg.alive');}catch(e){}CLOUD_READY=false;CURRENT_EMAIL=null;if(sbClient){try{await sbClient.auth.signOut();}catch(e){}}renderLogin('You have signed out. Sign in again to continue.');}
 function changePwModal(){const ex=document.getElementById('cpwmodal');if(ex)ex.remove();const w=document.createElement('div');w.id='cpwmodal';w.className='od-overlay';w.style.background='rgba(4,35,66,.45)';
  w.innerHTML=`<div class="od-box" style="border-color:var(--navy);max-width:400px;text-align:left"><h2 style="color:var(--navy);font-size:19px">🔒 Change my password</h2>
